@@ -1,2 +1,2 @@
-# antity
-antity
+# Antity
+A vulkan experiment.
