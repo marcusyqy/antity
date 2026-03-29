@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "../antity/graph/graph.hpp"
 
+#if 0
 int main(int argc, char **argv) {
   (void)argc;
   (void)argv;
@@ -15,3 +16,14 @@ int main(int argc, char **argv) {
   fprintf(stdout, "Hello world\n");
   return 0;
 }
+
+#else
+
+int main(int argc, char **argv) {
+  (void)argc;
+  (void)argv;
+
+  fprintf(stdout, "hello world\n");
+  return 0;
+}
+#endif
