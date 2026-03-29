@@ -1,7 +1,13 @@
-#ifndef ANTITY_GRAPH_HPP_
-#define ANTITY_GRAPH_HPP_
+#ifndef _ANTITY_GRAPH_GRAPH_HPP_
+#define _ANTITY_GRAPH_GRAPH_HPP_
 
-// struct Graph {
-// };
+namespace ant {
 
-#endif // ANTITY_GRAPH_HPP_
+class Graph {
+public:
+private:
+};
+
+} // namespace ant
+
+#endif // _ANTITY_GRAPH_GRAPH_HPP_
