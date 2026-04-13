@@ -15,7 +15,8 @@ def process_win32_env(str):
   for i in range(0, len(arr)):
     ret += arr[i]
     if(i+1 != len(arr)):
-      ret += "\\\\"
+      # ret += "\\\\"
+      ret += "/"
 
   return ret
 

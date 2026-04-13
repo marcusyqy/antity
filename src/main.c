@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <volk/volk.h>
 
+void init_vulkan(void) {
+}
+
 int main() {
   if (!SDL_Init(SDL_INIT_VIDEO)) fprintf(stderr, "Failed to initialize SDL3: %s\n", SDL_GetError());
 
