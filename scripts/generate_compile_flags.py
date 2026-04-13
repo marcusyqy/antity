@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+
+# possible TODO is to make this also run the bat file?
+import os, sys
+
+includes = [
+  "src",
+  "third_party/SDL/include",
+  "third_party"
+]
+
+def process_win32_env(str):
+  arr = str.split("\\")
+  ret=""
+  for i in range(0, len(arr)):
+    ret += arr[i]
+    if(i+1 != len(arr)):
+      ret += "\\\\"
+
+  return ret
+
+def generate_compile_commands():
+  print("Generating compile_flags.txt...")
+
+  compile_flags=""
+  for include in includes:
+    compile_flags += "-I" + include + "\n"
+
+  assert os.environ.__contains__("VULKAN_SDK"), "Vulkan SDK needs to be downloaded since this project relies on it."
+  compile_flags += "-I" + process_win32_env(os.environ["VULKAN_SDK"]) + "/Include\n"
+
+  f = open("compile_flags.txt", "w")
+  f.write(compile_flags)
+
+
+def need_setup():
+  setup_py = "scripts/generate_compile_flags.py"
+  compile_flags = "compile_flags.txt"
+  return not os.path.exists(compile_flags) or os.path.getmtime(setup_py) > os.path.getmtime(compile_flags)
+
+if __name__ == "__main__":
+  if need_setup():
+    generate_compile_commands()
+

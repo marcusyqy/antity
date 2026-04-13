@@ -7,18 +7,22 @@ cd /d "%~dp0"
 for %%a in (%*) do set "%%a=1"
 
 set CC=cl.exe
-set COMPILE_FLAGS=/W4 /O2 /EHsc /Zi
+set COMPILE_FLAGS=/W4 /O2 /EHsc /Zi -external:W0
 set BUILD_DIR=.build
 
 if not exist .build mkdir .build
 if not exist .build\SDL3.lib call scripts\install_sdl3.cmd || exit /b 1
 
+call python3 scripts\install_vulkan.py
+
 set LINK_FLAGS=/link SDL3.lib
-set INCLUDE_FLAGS=/I..\third_party\SDL\include /I..\src
+set INCLUDE_FLAGS=-external:I..\third_party\SDL\include /I..\src /I..\third_party -external:I%VULKAN_SDK%\Include
 
 pushd .build
 call %CC% %COMPILE_FLAGS% %INCLUDE_FLAGS% ..\src\main.c /Fe:game.exe %LINK_FLAGS% || exit /b 1
 popd
+
+call python3 scripts\generate_compile_flags.py
 
 cmd /c exit %ERRORLEVEL%
 
