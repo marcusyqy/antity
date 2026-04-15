@@ -23,7 +23,7 @@ pushd .build
 call %CC% %COMPILE_FLAGS% %INCLUDE_FLAGS% ..\src\main.c /Fe:game.exe %LINK_FLAGS% || exit /b 1
 popd
 
-call python3 scripts\generate_compile_flags.py
+REM call python3 scripts\generate_compile_flags.py
 
 cmd /c exit %ERRORLEVEL%
 
