@@ -1,4 +1,4 @@
 .build
 build.exe
 *.obj
-compile_flags.txt
+# compile_flags.txt
