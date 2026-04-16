@@ -2,3 +2,4 @@
 build.exe
 *.obj
 # compile_flags.txt
+.vs

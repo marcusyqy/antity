@@ -13,6 +13,7 @@ set BUILD_DIR=.build
 if not exist .build mkdir .build
 if not exist .build\SDL3.lib call scripts\install_sdl3.cmd || exit /b 1
 
+REM need to replace this awayyy
 call python3 scripts\install_vulkan.py
 
 set LINK_FLAGS=/link SDL3.lib
@@ -20,7 +21,11 @@ set INCLUDE_FLAGS=-external:I..\third_party\SDL\include /I..\src /I..\third_part
 REM -external:I%VULKAN_SDK%\Include
 
 pushd .build
-call %CC% %COMPILE_FLAGS% %INCLUDE_FLAGS% ..\src\main.c /Fe:game.exe %LINK_FLAGS% || exit /b 1
+call %CC% %COMPILE_FLAGS% %INCLUDE_FLAGS% ..\src\main.c /Fe:game.exe %LINK_FLAGS% || (
+  del game.exe
+  exit /b 1
+)
+
 popd
 
 REM call python3 scripts\generate_compile_flags.py
