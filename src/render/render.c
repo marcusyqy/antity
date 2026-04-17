@@ -8,7 +8,7 @@
 #include <volk/volk.h>
 
 #include <SDL3/SDL_vulkan.h>
-// #include <vma/vk_mem_alloc.h>
+#include <vma/vk_mem_alloc.h>
 
 
 #define VK_RESULT_LIST                                     \
@@ -93,7 +93,7 @@ typedef struct VulkanResourceEngine {
   VkQueue                  present_queue;
   VkQueue                  graphics_queue;
   VkQueue                  compute_queue;
-  // VmaAllocator             vma;
+  VmaAllocator             vma;
 } VulkanResourceEngine;
 
 static VulkanResourceEngine engine = {0};
@@ -180,7 +180,7 @@ static void vk_create_debug_utils_messenger(void) {
 
 VkSurfaceKHR vk_create_surface(SDL_Window *sdl) {
   VkSurfaceKHR surface = 0;
-  bool result = SDL_Vulkan_CreateSurface(sdl, engine.instance, engine.allocator, &surface);
+  b8 result = SDL_Vulkan_CreateSurface(sdl, engine.instance, engine.allocator, &surface);
   assert(result);
   return surface;
 }
@@ -289,7 +289,6 @@ static void vk_create_device(void) {
 
   VK_EXPECT_SUCCESS(vkCreateDevice(engine.physical_device, &create_info, engine.allocator, &engine.device));
   assert(engine.device);
-
   volkLoadDevice(engine.device);
 
 
@@ -412,28 +411,29 @@ void initialize_vulkan(void) {
   fprintf(stdout, "Chosen physical device :%s\n", physical_device_properties.deviceName);
   vk_create_device();
 
-  // VmaVulkanFunctions vk_functions = {
-  //   .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
-  //   .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
-  //   .vkCreateImage = vkCreateImage
-  // };
-  // VmaAllocatorCreateInfo vma_create_info = {
-  //   .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-  //   .physicalDevice = engine.physical_device,
-  //   .device = engine.device,
-  //   .pVulkanFunctions = &vk_functions,
-  //   .instance = engine.instance
-  // };
-  // VK_EXPECT_SUCCESS(vmaCreateAllocator(&vma_create_info, &engine.vma));
+  VmaVulkanFunctions vk_functions = {
+    .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+    .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+    .vkCreateImage = vkCreateImage
+  };
+  VmaAllocatorCreateInfo vma_create_info = {
+    .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+    .physicalDevice = engine.physical_device,
+    .device = engine.device,
+    .pVulkanFunctions = &vk_functions,
+    .instance = engine.instance,
+    .vulkanApiVersion = VK_API_VERSION_1_4,
+  };
+  VK_EXPECT_SUCCESS(vmaCreateAllocator(&vma_create_info, &engine.vma));
 }
 
 void cleanup_vulkan(void) {
   VK_EXPECT_SUCCESS(vkDeviceWaitIdle(engine.device));
 
+  vmaDestroyAllocator(engine.vma);
   vkDestroyDevice(engine.device, engine.allocator);
   vkDestroyDebugUtilsMessengerEXT(engine.instance, engine.debug, engine.allocator);
   vkDestroyInstance(engine.instance, engine.allocator);
-  // vmaDestroyAllocator(engine.vma);
 }
 
 // @TODO: we can change this to just create window and then from there initialize vulkan if we have not.
