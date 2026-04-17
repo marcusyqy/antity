@@ -1,3 +1,5 @@
 -Isrc
 -Ithird_party/SDL/include
 -Ithird_party
+-DVOLK_IMPLEMENTATION
+-DVMA_IMPLEMENTATION

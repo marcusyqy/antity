@@ -117,9 +117,7 @@
 #define mb_MarkNotImplemented(x) assert(!(x))
 
 #if !CPP_LANG
-typedef uint8_t bool;
-#define true 1
-#define false 0
+typedef uint8_t b8;
 #endif // !CPP_LANG
 
 #endif // _MB_BASE_H_

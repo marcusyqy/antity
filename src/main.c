@@ -8,6 +8,7 @@
 int main() {
   if(!SDL_Init(SDL_INIT_VIDEO)) fprintf(stderr, "Failed to initialize SDL3: %s\n", SDL_GetError());
   SDL_SetHint(SDL_HINT_RENDER_DRIVER, "vulkan");
+  initialize_vulkan();
 
   float main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
   fprintf(stdout, "Main scale %f\n", main_scale);
@@ -29,6 +30,8 @@ int main() {
   }
 
   Window window = create_window(sdl);
+  window.w = window_width;
+  window.h = window_height;
 
   SDL_Event event = {0};
   bool running = true;
@@ -47,7 +50,9 @@ int main() {
     SDL_GL_SwapWindow(window.sdl);
   }
 
+  destroy_window(&window);
   SDL_DestroyWindow(window.sdl);
+  cleanup_vulkan();
   SDL_Quit();
   return 0;
 }

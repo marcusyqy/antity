@@ -12,12 +12,13 @@ set BUILD_DIR=.build
 
 if not exist .build mkdir .build
 if not exist .build\SDL3.lib call scripts\install_sdl3.cmd || exit /b 1
+if not exist .build\vma.lib  call scripts\build_vma.cmd || exit /b 1
 
 REM need to replace this awayyy
 call python3 scripts\install_vulkan.py
 
-set LINK_FLAGS=/link SDL3.lib
-set INCLUDE_FLAGS=-external:I..\third_party\SDL\include /I..\src /I..\third_party
+set LINK_FLAGS=/link SDL3.lib vma.lib
+set INCLUDE_FLAGS=-external:I..\third_party\SDL\include /I..\src -external:I..\third_party
 REM -external:I%VULKAN_SDK%\Include
 
 pushd .build

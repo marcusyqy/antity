@@ -2,9 +2,13 @@
 #include "base/arena.h"
 #include <stdio.h>
 
-#include <SDL3/SDL_vulkan.h>
+#include <vulkan/vulkan.h>
+
 #define VOLK_IMPLEMENTATION
 #include <volk/volk.h>
+
+#include <SDL3/SDL_vulkan.h>
+#include <vma/vk_mem_alloc.h>
 
 
 #define VK_RESULT_LIST                                     \
@@ -89,6 +93,7 @@ typedef struct VulkanResourceEngine {
   VkQueue                  present_queue;
   VkQueue                  graphics_queue;
   VkQueue                  compute_queue;
+  VmaAllocator             vma;
 } VulkanResourceEngine;
 
 static VulkanResourceEngine engine = {0};
@@ -259,22 +264,27 @@ static void vk_create_device(void) {
     if(queue_bit == ideal) break;
   }
 
+  const char *enabled_extension[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
   // nothing to enable yet.
-  VkPhysicalDeviceFeatures enabled_features = {0};
+
+  VkPhysicalDeviceVulkan12Features enabled_vk12_features = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .descriptorIndexing = VK_TRUE, .shaderSampledImageArrayNonUniformIndexing = VK_TRUE, .descriptorBindingVariableDescriptorCount = VK_TRUE, .runtimeDescriptorArray = VK_TRUE, .bufferDeviceAddress = VK_TRUE };
+  VkPhysicalDeviceVulkan13Features enabled_vk13_features = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &enabled_vk12_features, .synchronization2 = VK_TRUE, .dynamicRendering = VK_TRUE };
+  VkPhysicalDeviceFeatures enabled_features = { .samplerAnisotropy = VK_TRUE };
 
   VkDeviceCreateInfo create_info = {
-    .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-    .pNext = 0,
-    .flags = 0,
-    .queueCreateInfoCount = queue_create_info_count,
-    .pQueueCreateInfos = queue_create_info,
+    .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+    .pNext                   = &enabled_vk13_features,
+    .flags                   = 0,
+    .queueCreateInfoCount    = queue_create_info_count,
+    .pQueueCreateInfos       = queue_create_info,
     // @NOTE: enabledLayerCount is legacy and should not be used
-    .enabledLayerCount = 0,
+    .enabledLayerCount       = 0,
     // @NOTE: ppEnabledLayerNames is legacy and should not be used
-    .ppEnabledLayerNames = 0,
-    .enabledExtensionCount = 0, // @TODO: figure out what extensions we will need.
-    .ppEnabledExtensionNames = 0,
-    .pEnabledFeatures = &enabled_features,
+    .ppEnabledLayerNames     = 0,
+    .enabledExtensionCount   = 1,
+    .ppEnabledExtensionNames = enabled_extension,
+    .pEnabledFeatures        = &enabled_features,
   };
 
   VK_EXPECT_SUCCESS(vkCreateDevice(engine.physical_device, &create_info, engine.allocator, &engine.device));
@@ -287,9 +297,9 @@ static void vk_create_device(void) {
   queue_bit = 0;
   for(uint32_t i = 0; i < queue_count; ++i) {
     uint8_t last_queue_bit = queue_bit;
-    bool supports_graphics_queue = (queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT;
-    bool supports_compute_queue = (queue_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT;
-    bool supports_present_queue = SDL_Vulkan_GetPresentationSupport(engine.instance, engine.physical_device, i);
+    b8 supports_graphics_queue = (queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT;
+    b8 supports_compute_queue = (queue_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT;
+    b8 supports_present_queue = SDL_Vulkan_GetPresentationSupport(engine.instance, engine.physical_device, i);
 
     if(supports_graphics_queue) queue_bit |= graphics_bit;
     if(supports_compute_queue)  queue_bit |= compute_bit;
@@ -311,26 +321,76 @@ static void vk_create_device(void) {
   mb_end_temp_arena(&temp);
 }
 
-// @TODO: we can change this to just create window and then from there initialize vulkan if we have not.
-Window create_window(SDL_Window *sdl) {
-  Window window = {0};
+// static void vk_create_or_recreate_swapchain(Window *window) {
+//   (void)window;
+//
+//   VkSurfaceCapabilitiesKHR surface_capabilities = {0};
+//   VK_EXPECT_SUCCESS(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(engine.physical_device, window->surface, &surface_capabilities));
+//
+//   VkSwapchainCreateInfoKHR create_info = {
+//     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+//     .pNext = 0,
+//     .flags = 0,
+//     .surface = window->surface,
+//     .minImageCount = surface_capabilities.minImageCount,
+//     VkFormat                         imageFormat;
+//     VkColorSpaceKHR                  imageColorSpace;
+//     VkExtent2D                       imageExtent;
+//     uint32_t                         imageArrayLayers;
+//     VkImageUsageFlags                imageUsage;
+//     VkSharingMode                    imageSharingMode;
+//     uint32_t                         queueFamilyIndexCount;
+//     const uint32_t*                  pQueueFamilyIndices;
+//     VkSurfaceTransformFlagBitsKHR    preTransform;
+//     VkCompositeAlphaFlagBitsKHR      compositeAlpha;
+//     VkPresentModeKHR                 presentMode;
+//     VkBool32                         clipped;
+//     .oldSwapchain = window->swapchain,
+//   };
+//
+//   VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(engine.device, &create_info, engine.allocator, &window->sc));
+// }
 
-  // figure out when we should initialize (create_window right now cannot be called twice).
+void initialize_vulkan(void) {
   VK_EXPECT_SUCCESS(volkInitialize());
   vk_create_instance();
   volkLoadInstance(engine.instance);
   vk_create_debug_utils_messenger();
-
-  window.surface = vk_create_surface(sdl);
-
   vk_choose_physical_device();
 
   VkPhysicalDeviceProperties physical_device_properties = {0};
   vkGetPhysicalDeviceProperties(engine.physical_device, &physical_device_properties);
   fprintf(stdout, "Chosen physical device :%s\n", physical_device_properties.deviceName);
-
   vk_create_device();
 
+  VmaVulkanFunctions vk_functions = {
+    .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+    .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+    .vkCreateImage = vkCreateImage
+  };
+  VmaAllocatorCreateInfo vma_create_info = {
+    .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+    .physicalDevice = engine.physical_device,
+    .device = engine.device,
+    .pVulkanFunctions = &vk_functions,
+    .instance = engine.instance
+  };
+  VK_EXPECT_SUCCESS(vmaCreateAllocator(&vma_create_info, &engine.vma));
+}
+
+void cleanup_vulkan(void) {
+  VK_EXPECT_SUCCESS(vkDeviceWaitIdle(engine.device));
+
+  vkDestroyInstance(engine.instance, engine.allocator);
+  vkDestroyDevice(engine.device, engine.allocator);
+}
+
+// @TODO: we can change this to just create window and then from there initialize vulkan if we have not.
+Window create_window(SDL_Window *sdl) {
+  // figure out when we should initialize (create_window right now cannot be called twice).
+  Window window = {0};
+  window.surface = vk_create_surface(sdl);
+  // vk_create_or_recreate_swapchain(&window);
   return window;
 }
 

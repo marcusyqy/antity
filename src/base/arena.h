@@ -17,7 +17,7 @@ typedef struct {
 
 typedef struct {
   size_t count;
-  bool zero;
+  b8     zero;
 } mb_ArenaPushParams;
 
 mb_Arena *mb_arena_create(size_t size, size_t reserve_size);
