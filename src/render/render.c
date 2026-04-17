@@ -358,19 +358,43 @@ static void vk_create_or_recreate_swapchain(Window *window) {
 
   VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(engine.device, &create_info, engine.allocator, &window->sc));
 
+  // clean up past window stuff.
+  for(uint32_t i = 0; i < window->d_count; ++i) vkDestroyImageView(engine.device, window->d[i].view, engine.allocator);
+
   vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count,  0);
 
   mb_TempArena temp = mb_begin_temp_arena(mb_get_scratch_arena());
   VkImage *images = mb_arena_push(temp.arena, VkImage, .count = window->d_count);
   vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count, images);
 
-  // clean up past window stuff.
-  for(uint32_t i; i < window->d_count; ++i) vkDestroyImageView(engine.device, window->d[i].view, engine.allocator);
 
   // @TODO: this needs to change when we decide to recreate stuff. But for now we can just leak lol.
   window->d = mb_arena_push(window->arena, WindowDynData, .count = window->d_count);
-  for(uint32_t i; i < window->d_count; ++i) {
+  for(uint32_t i = 0; i < window->d_count; ++i) {
     window->d[i].image = images[i];
+
+    VkImageViewCreateInfo v_create_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = 0,
+      .flags = 0,
+      .image = window->d[i].image,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = format,
+      .components = (VkComponentMapping) {
+        .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .a = VK_COMPONENT_SWIZZLE_IDENTITY
+      },
+      .subresourceRange = (VkImageSubresourceRange) {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+      }
+    };
+    vkCreateImageView(engine.device, &v_create_info, engine.allocator, &window->d[i].view);
   }
   mb_end_temp_arena(&temp);
 }
@@ -426,6 +450,10 @@ void destroy_window(Window *window) {
   assert(window);
   // @TODO: figure out a good way to cleanup.
   VK_EXPECT_SUCCESS(vkDeviceWaitIdle(engine.device));
+
+  // clean up past window stuff.
+  for(uint32_t i = 0; i < window->d_count; ++i) vkDestroyImageView(engine.device, window->d[i].view, engine.allocator);
+
   vkDestroySwapchainKHR(engine.device, window->sc, engine.allocator);
   SDL_Vulkan_DestroySurface(engine.instance, window->surface, engine.allocator);
   mb_arena_destroy(window->arena);
