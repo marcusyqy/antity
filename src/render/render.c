@@ -335,27 +335,44 @@ static void vk_create_or_recreate_swapchain(Window *window) {
 
   const VkFormat format = VK_FORMAT_B8G8R8A8_SRGB ;
   VkSwapchainCreateInfoKHR create_info = {
-    .sType           = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-    .pNext           = 0,
-    .flags           = 0,
-    .surface         = window->surface,
-    .minImageCount   = surface_capabilities.minImageCount,
-    .imageFormat     = format,
-    .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
-    .imageExtent = extent,
-    .imageArrayLayers = 1,
-    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-    .imageSharingMode = 0,
+    .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .pNext                 = 0,
+    .flags                 = 0,
+    .surface               = window->surface,
+    .minImageCount         = surface_capabilities.minImageCount,
+    .imageFormat           = format,
+    .imageColorSpace       = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
+    .imageExtent           = extent,
+    .imageArrayLayers      = 1,
+    .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    .imageSharingMode      = 0,
     .queueFamilyIndexCount = 0,
-    .pQueueFamilyIndices = 0,
-    .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-    .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-    .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
-    .clipped = VK_FALSE,
-    .oldSwapchain = window->sc,
+    .pQueueFamilyIndices   = 0,
+    .preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+    .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+    .presentMode           = VK_PRESENT_MODE_MAILBOX_KHR,
+    .clipped               = VK_FALSE,
+    .oldSwapchain          = window->sc,
   };
 
+
   VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(engine.device, &create_info, engine.allocator, &window->sc));
+
+  vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count,  0);
+
+  mb_TempArena temp = mb_begin_temp_arena(mb_get_scratch_arena());
+  VkImage *images = mb_arena_push(temp.arena, VkImage, .count = window->d_count);
+  vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count, images);
+
+  // clean up past window stuff.
+  for(uint32_t i; i < window->d_count; ++i) vkDestroyImageView(engine.device, window->d[i].view, engine.allocator);
+
+  // @TODO: this needs to change when we decide to recreate stuff. But for now we can just leak lol.
+  window->d = mb_arena_push(window->arena, WindowDynData, .count = window->d_count);
+  for(uint32_t i; i < window->d_count; ++i) {
+    window->d[i].image = images[i];
+  }
+  mb_end_temp_arena(&temp);
 }
 
 void initialize_vulkan(void) {
@@ -399,6 +416,7 @@ void cleanup_vulkan(void) {
 Window create_window(SDL_Window *sdl) {
   // figure out when we should initialize (create_window right now cannot be called twice).
   Window window = {0};
+  window.arena = mb_arena_create(0, KB(1));
   window.surface = vk_create_surface(sdl);
   vk_create_or_recreate_swapchain(&window);
   return window;
@@ -410,4 +428,5 @@ void destroy_window(Window *window) {
   VK_EXPECT_SUCCESS(vkDeviceWaitIdle(engine.device));
   vkDestroySwapchainKHR(engine.device, window->sc, engine.allocator);
   SDL_Vulkan_DestroySurface(engine.instance, window->surface, engine.allocator);
+  mb_arena_destroy(window->arena);
 }
