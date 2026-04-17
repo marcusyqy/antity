@@ -30,8 +30,6 @@ int main() {
   }
 
   Window window = create_window(sdl);
-  window.w = window_width;
-  window.h = window_height;
 
   SDL_Event event = {0};
   bool running = true;

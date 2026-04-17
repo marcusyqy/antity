@@ -2,13 +2,13 @@
 #include "base/arena.h"
 #include <stdio.h>
 
-#include <vulkan/vulkan.h>
 
+#include <vulkan/vulkan.h>
 #define VOLK_IMPLEMENTATION
 #include <volk/volk.h>
 
 #include <SDL3/SDL_vulkan.h>
-#include <vma/vk_mem_alloc.h>
+// #include <vma/vk_mem_alloc.h>
 
 
 #define VK_RESULT_LIST                                     \
@@ -93,7 +93,7 @@ typedef struct VulkanResourceEngine {
   VkQueue                  present_queue;
   VkQueue                  graphics_queue;
   VkQueue                  compute_queue;
-  VmaAllocator             vma;
+  // VmaAllocator             vma;
 } VulkanResourceEngine;
 
 static VulkanResourceEngine engine = {0};
@@ -200,7 +200,7 @@ static void vk_choose_physical_device() {
     uint32_t queue_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(pd[i], &queue_count, 0);
 
-    VkQueueFamilyProperties *queue_props = mb_arena_push(temp.arena, VkQueueFamilyProperties, .count = queue_count);
+    VkQueueFamilyProperties *queue_props = mb_arena_push(scope_temp.arena, VkQueueFamilyProperties, .count = queue_count);
     vkGetPhysicalDeviceQueueFamilyProperties(pd[i], &queue_count, queue_props);
 
     const uint8_t graphics_bit = 1 << 1;
@@ -321,37 +321,45 @@ static void vk_create_device(void) {
   mb_end_temp_arena(&temp);
 }
 
-// static void vk_create_or_recreate_swapchain(Window *window) {
-//   (void)window;
-//
-//   VkSurfaceCapabilitiesKHR surface_capabilities = {0};
-//   VK_EXPECT_SUCCESS(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(engine.physical_device, window->surface, &surface_capabilities));
-//
-//   VkSwapchainCreateInfoKHR create_info = {
-//     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-//     .pNext = 0,
-//     .flags = 0,
-//     .surface = window->surface,
-//     .minImageCount = surface_capabilities.minImageCount,
-//     VkFormat                         imageFormat;
-//     VkColorSpaceKHR                  imageColorSpace;
-//     VkExtent2D                       imageExtent;
-//     uint32_t                         imageArrayLayers;
-//     VkImageUsageFlags                imageUsage;
-//     VkSharingMode                    imageSharingMode;
-//     uint32_t                         queueFamilyIndexCount;
-//     const uint32_t*                  pQueueFamilyIndices;
-//     VkSurfaceTransformFlagBitsKHR    preTransform;
-//     VkCompositeAlphaFlagBitsKHR      compositeAlpha;
-//     VkPresentModeKHR                 presentMode;
-//     VkBool32                         clipped;
-//     .oldSwapchain = window->swapchain,
-//   };
-//
-//   VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(engine.device, &create_info, engine.allocator, &window->sc));
-// }
+static void vk_create_or_recreate_swapchain(Window *window) {
+  VkSurfaceCapabilitiesKHR surface_capabilities = {0};
+  VK_EXPECT_SUCCESS(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(engine.physical_device, window->surface, &surface_capabilities));
+
+  VkExtent2D extent = surface_capabilities.currentExtent;
+  if (surface_capabilities.currentExtent.width == 0xFFFFFFFF) {
+    int w, h;
+    SDL_GetWindowSize(window->sdl, &w, &h);
+    assert(w >= 0 && h >= 0);
+    extent = (VkExtent2D){ .width = (uint32_t)w, .height = (uint32_t)h };
+  }
+
+  const VkFormat format = VK_FORMAT_B8G8R8A8_SRGB ;
+  VkSwapchainCreateInfoKHR create_info = {
+    .sType           = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .pNext           = 0,
+    .flags           = 0,
+    .surface         = window->surface,
+    .minImageCount   = surface_capabilities.minImageCount,
+    .imageFormat     = format,
+    .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
+    .imageExtent = extent,
+    .imageArrayLayers = 1,
+    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    .imageSharingMode = 0,
+    .queueFamilyIndexCount = 0,
+    .pQueueFamilyIndices = 0,
+    .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+    .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+    .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    .clipped = VK_FALSE,
+    .oldSwapchain = window->sc,
+  };
+
+  VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(engine.device, &create_info, engine.allocator, &window->sc));
+}
 
 void initialize_vulkan(void) {
+  SDL_Vulkan_LoadLibrary(NULL);
   VK_EXPECT_SUCCESS(volkInitialize());
   vk_create_instance();
   volkLoadInstance(engine.instance);
@@ -363,26 +371,28 @@ void initialize_vulkan(void) {
   fprintf(stdout, "Chosen physical device :%s\n", physical_device_properties.deviceName);
   vk_create_device();
 
-  VmaVulkanFunctions vk_functions = {
-    .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
-    .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
-    .vkCreateImage = vkCreateImage
-  };
-  VmaAllocatorCreateInfo vma_create_info = {
-    .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-    .physicalDevice = engine.physical_device,
-    .device = engine.device,
-    .pVulkanFunctions = &vk_functions,
-    .instance = engine.instance
-  };
-  VK_EXPECT_SUCCESS(vmaCreateAllocator(&vma_create_info, &engine.vma));
+  // VmaVulkanFunctions vk_functions = {
+  //   .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+  //   .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+  //   .vkCreateImage = vkCreateImage
+  // };
+  // VmaAllocatorCreateInfo vma_create_info = {
+  //   .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+  //   .physicalDevice = engine.physical_device,
+  //   .device = engine.device,
+  //   .pVulkanFunctions = &vk_functions,
+  //   .instance = engine.instance
+  // };
+  // VK_EXPECT_SUCCESS(vmaCreateAllocator(&vma_create_info, &engine.vma));
 }
 
 void cleanup_vulkan(void) {
   VK_EXPECT_SUCCESS(vkDeviceWaitIdle(engine.device));
 
-  vkDestroyInstance(engine.instance, engine.allocator);
   vkDestroyDevice(engine.device, engine.allocator);
+  vkDestroyDebugUtilsMessengerEXT(engine.instance, engine.debug, engine.allocator);
+  vkDestroyInstance(engine.instance, engine.allocator);
+  // vmaDestroyAllocator(engine.vma);
 }
 
 // @TODO: we can change this to just create window and then from there initialize vulkan if we have not.
@@ -390,11 +400,14 @@ Window create_window(SDL_Window *sdl) {
   // figure out when we should initialize (create_window right now cannot be called twice).
   Window window = {0};
   window.surface = vk_create_surface(sdl);
-  // vk_create_or_recreate_swapchain(&window);
+  vk_create_or_recreate_swapchain(&window);
   return window;
 }
 
 void destroy_window(Window *window) {
   assert(window);
+  // @TODO: figure out a good way to cleanup.
+  VK_EXPECT_SUCCESS(vkDeviceWaitIdle(engine.device));
+  vkDestroySwapchainKHR(engine.device, window->sc, engine.allocator);
   SDL_Vulkan_DestroySurface(engine.instance, window->surface, engine.allocator);
 }

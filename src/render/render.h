@@ -8,8 +8,6 @@ typedef struct Window {
   VkSurfaceKHR surface;
   VkSwapchainKHR sc;
   SDL_Window *sdl;
-
-  uint32_t w, h;
 } Window;
 
 void initialize_vulkan();
