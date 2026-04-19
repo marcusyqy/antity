@@ -5,7 +5,7 @@
 // #include "os.h"
 
 // @TODO: migrate all these to OS based functions.
-mb_File mb_open_file(const mb_StringView *str, mb_FileOpenMode open_mode) {
+mb_File mb_open_file(mb_StringView str, mb_FileOpenMode open_mode) {
   mb_File fptr = NULL;
   mb_Arena *scratch = mb_get_scratch_arena();
   const char *file = mb_str_to_cstr(scratch, str);
@@ -27,6 +27,7 @@ void mb_close_file(mb_File file) {
 
 mb_StringView mb_file_read_bytes(mb_Arena *arena, mb_File file) {
   assert(arena);
+  assert(file);
   fseek(file, 0L, SEEK_END);
   size_t file_length = ftell(file);
   rewind(file);

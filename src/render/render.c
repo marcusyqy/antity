@@ -291,7 +291,6 @@ static void vk_create_device(void) {
   assert(engine.device);
   volkLoadDevice(engine.device);
 
-
   // reset queue_bit for reuse
   queue_bit = 0;
   for(uint32_t i = 0; i < queue_count; ++i) {
@@ -332,14 +331,15 @@ static void vk_create_or_recreate_swapchain(Window *window) {
     extent = (VkExtent2D){ .width = (uint32_t)w, .height = (uint32_t)h };
   }
 
-  const VkFormat format = VK_FORMAT_B8G8R8A8_SRGB ;
+  const VkFormat image_format = VK_FORMAT_B8G8R8A8_SRGB ;
+
   VkSwapchainCreateInfoKHR create_info = {
     .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
     .pNext                 = 0,
     .flags                 = 0,
     .surface               = window->surface,
     .minImageCount         = surface_capabilities.minImageCount,
-    .imageFormat           = format,
+    .imageFormat           = image_format,
     .imageColorSpace       = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
     .imageExtent           = extent,
     .imageArrayLayers      = 1,
@@ -354,11 +354,14 @@ static void vk_create_or_recreate_swapchain(Window *window) {
     .oldSwapchain          = window->sc,
   };
 
-
   VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(engine.device, &create_info, engine.allocator, &window->sc));
 
   // clean up past window stuff.
   for(uint32_t i = 0; i < window->d_count; ++i) vkDestroyImageView(engine.device, window->d[i].view, engine.allocator);
+
+  // we want to clean up everything here as well so that we don't leak. In the future we could probably keep those stuff until it needs
+  // to disappear like a bin.
+  mb_arena_clear(window->arena);
 
   vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count,  0);
 
@@ -378,7 +381,7 @@ static void vk_create_or_recreate_swapchain(Window *window) {
       .flags = 0,
       .image = window->d[i].image,
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format = format,
+      .format = image_format,
       .components = (VkComponentMapping) {
         .r = VK_COMPONENT_SWIZZLE_IDENTITY,
         .g = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -394,6 +397,19 @@ static void vk_create_or_recreate_swapchain(Window *window) {
       }
     };
     vkCreateImageView(engine.device, &v_create_info, engine.allocator, &window->d[i].view);
+
+    // VkFramebufferCreateFlags flags = 0;
+    // VkFramebufferCreateInfo f_create_info = {
+    // .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+    // .pNext = 0,
+    // .flags = 0,
+    // VkRenderPass                renderPass;
+    // uint32_t                    attachmentCount;
+    // const VkImageView*          pAttachments;
+    // uint32_t                    width;
+    // uint32_t                    height;
+    // uint32_t                    layers;
+    // };
   }
   mb_end_temp_arena(&temp);
 }

@@ -16,7 +16,7 @@ typedef uint8_t mb_FileOpenMode;
 
 typedef FILE *mb_File;
 
-mb_File       mb_open_file(const mb_StringView *str, mb_FileOpenMode open_mode);
+mb_File       mb_open_file(mb_StringView str, mb_FileOpenMode open_mode);
 void          mb_close_file(mb_File file);
 mb_StringView mb_file_read_bytes(mb_Arena *arena, mb_File file);
 

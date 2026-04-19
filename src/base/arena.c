@@ -69,6 +69,7 @@ mb_Arena *mb_get_scratch_arena(void) {
 }
 
 mb_TempArena mb_begin_temp_arena(mb_Arena *arena) {
+  if(!arena) arena = mb_get_scratch_arena();
   return (mb_TempArena) { .arena = arena, .offset = arena->offset };
 }
 

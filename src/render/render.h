@@ -8,6 +8,7 @@
 typedef struct WindowDynData {
   VkImage image;
   VkImageView view;
+  VkFramebuffer fb;
 } WindowDynData;
 
 typedef struct Window {

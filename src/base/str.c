@@ -7,14 +7,14 @@ mb_StringView mb_str_from_cstr(const char *str) {
   return (mb_StringView) { .data = (char *)str, .count = count };
 }
 
-char *mb_str_to_cstr(mb_Arena *arena, const mb_StringView *str) {
-  char *data = mb_arena_push(arena, char, .count = str->count + 1);
+char *mb_str_to_cstr(mb_Arena *arena, mb_StringView str) {
+  char *data = mb_arena_push(arena, char, .count = str.count + 1);
   mb_str_to_cstr_inplace(data, str);
   return data;
 }
 
-void mb_str_to_cstr_inplace(char *cstr, const mb_StringView *str) {
+void mb_str_to_cstr_inplace(char *cstr, mb_StringView str) {
   assert(cstr);
-  MemoryCopy(str, cstr, str->count);
-  cstr[str->count] = 0;
+  MemoryCopy(cstr, str.data, str.count);
+  cstr[str.count] = 0;
 }
