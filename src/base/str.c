@@ -31,6 +31,7 @@ mb_StringView mb_str_split_from_right_till(mb_StringView *str, char c) {
   // did not find
   if(i == -1) goto default_return;
 
+  // 1 after.
   size_t next_index = i + 1;
   word.data = str->data + next_index;
   word.count = str->count - next_index;

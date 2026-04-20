@@ -52,7 +52,6 @@ mb_StringView mb_file_read_bytes(mb_Arena *arena, mb_File file) {
 
 void mb_file_write_bytes(mb_File file, mb_StringView data) {
   // @TODO: figure out if there is an issue with LE / BE.
-  fprintf(stdout, "writing %zu size to file\n", data.count);
   fwrite(data.data, sizeof(char), data.count, file);
 }
 

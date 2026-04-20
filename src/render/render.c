@@ -2,7 +2,6 @@
 #include "base/arena.h"
 #include <stdio.h>
 
-
 #include <vulkan/vulkan.h>
 #define VOLK_IMPLEMENTATION
 #include <volk/volk.h>
@@ -64,39 +63,10 @@
   X(VK_ERROR_NOT_ENOUGH_SPACE_KHR)                         \
   X(VK_RESULT_MAX_ENUM)
 
-
-static const char *vk_result_to_string(VkResult result) {
-  switch(result) {
-#define X(result) case result: return #result;
-    VK_RESULT_LIST
-#undef X
-  }
-  return "VkResultUnknown";
-}
-
-#define VK_EXPECT_SUCCESS(result) do {                                              \
-  VkResult __result = (result);                                                     \
-  if(__result != VK_SUCCESS) {                                                      \
-    printf("Vk call `" #result "`: failed with %s", vk_result_to_string(__result)); \
-    exit(1);                                                                        \
-  }                                                                                 \
-} while(0)
-
 #define VK_MAX_QUEUES 3
 
-typedef struct VulkanResourceEngine {
-  VkAllocationCallbacks    *allocator;
-  VkInstance               instance;
-  VkDebugUtilsMessengerEXT debug;
-  VkPhysicalDevice         physical_device;
-  VkDevice                 device;
-  VkQueue                  present_queue;
-  VkQueue                  graphics_queue;
-  VkQueue                  compute_queue;
-  VmaAllocator             vma;
-} VulkanResourceEngine;
 
-static VulkanResourceEngine engine = {0};
+VulkanResourceEngine vk_engine = {0};
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -160,7 +130,7 @@ static void vk_create_instance(void) {
     .ppEnabledExtensionNames = instance_extensions,
   };
 
-  VK_EXPECT_SUCCESS(vkCreateInstance(&instance_create_info, engine.allocator, &engine.instance));
+  VK_EXPECT_SUCCESS(vkCreateInstance(&instance_create_info, vk_engine.allocator, &vk_engine.instance));
 
   mb_end_temp_arena(&arena);
 
@@ -174,25 +144,25 @@ static void vk_create_debug_utils_messenger(void) {
     .pfnUserCallback = debug_utils_callback,
     .pUserData       = 0
   };
-  VK_EXPECT_SUCCESS(vkCreateDebugUtilsMessengerEXT(engine.instance, &create_info, engine.allocator, &engine.debug));
+  VK_EXPECT_SUCCESS(vkCreateDebugUtilsMessengerEXT(vk_engine.instance, &create_info, vk_engine.allocator, &vk_engine.debug));
 }
 
 
 VkSurfaceKHR vk_create_surface(SDL_Window *sdl) {
   VkSurfaceKHR surface = 0;
-  b8 result = SDL_Vulkan_CreateSurface(sdl, engine.instance, engine.allocator, &surface);
+  b8 result = SDL_Vulkan_CreateSurface(sdl, vk_engine.instance, vk_engine.allocator, &surface);
   assert(result);
   return surface;
 }
 
 static void vk_choose_physical_device() {
   uint32_t count = 0;
-  vkEnumeratePhysicalDevices(engine.instance, &count, 0);
+  vkEnumeratePhysicalDevices(vk_engine.instance, &count, 0);
 
   mb_TempArena temp = mb_begin_temp_arena(0);
 
   VkPhysicalDevice *pd = mb_arena_push(temp.arena, VkPhysicalDevice, .count = count);
-  vkEnumeratePhysicalDevices(engine.instance, &count, pd);
+  vkEnumeratePhysicalDevices(vk_engine.instance, &count, pd);
 
   for(uint32_t i = 0; i < count; ++i) {
 
@@ -212,29 +182,29 @@ static void vk_choose_physical_device() {
     for(uint32_t j = 0; j < queue_count; ++j) {
       if((queue_props[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT) queue_bit |= graphics_bit;
       if((queue_props[j].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT)   queue_bit |= compute_bit;
-      if(SDL_Vulkan_GetPresentationSupport(engine.instance, pd[i], j))                 queue_bit |= present_bit;
+      if(SDL_Vulkan_GetPresentationSupport(vk_engine.instance, pd[i], j))              queue_bit |= present_bit;
       if(ideal == queue_bit) break;
     }
     mb_end_temp_arena(&scope_temp);
 
     if(ideal == queue_bit) {
-      engine.physical_device = pd[i];
+      vk_engine.physical_device = pd[i];
       break;
     }
   }
 
   mb_end_temp_arena(&temp);
-  assert(engine.physical_device);
+  assert(vk_engine.physical_device);
 }
 
 static void vk_create_device(void) {
   mb_TempArena temp = mb_begin_temp_arena(0);
 
   uint32_t queue_count = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties(engine.physical_device, &queue_count, 0);
+  vkGetPhysicalDeviceQueueFamilyProperties(vk_engine.physical_device, &queue_count, 0);
 
   VkQueueFamilyProperties *queue_props = mb_arena_push(temp.arena, VkQueueFamilyProperties, .count = queue_count);
-  vkGetPhysicalDeviceQueueFamilyProperties(engine.physical_device, &queue_count, queue_props);
+  vkGetPhysicalDeviceQueueFamilyProperties(vk_engine.physical_device, &queue_count, queue_props);
 
   VkDeviceQueueCreateInfo queue_create_info[VK_MAX_QUEUES] = {0};
   uint32_t queue_create_info_count = 0;
@@ -249,9 +219,9 @@ static void vk_create_device(void) {
   uint8_t queue_bit = 0;
   for(uint32_t i = 0; i < queue_count; ++i) {
     uint8_t last_queue_bit = queue_bit;
-    if((queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT)  queue_bit |= graphics_bit;
-    if((queue_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT)    queue_bit |= compute_bit;
-    if(SDL_Vulkan_GetPresentationSupport(engine.instance, engine.physical_device, i)) queue_bit |= present_bit;
+    if((queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT)        queue_bit |= graphics_bit;
+    if((queue_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT)          queue_bit |= compute_bit;
+    if(SDL_Vulkan_GetPresentationSupport(vk_engine.instance, vk_engine.physical_device, i)) queue_bit |= present_bit;
 
     if(last_queue_bit != queue_bit) {
       queue_create_info[queue_create_info_count].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -287,9 +257,9 @@ static void vk_create_device(void) {
     .pEnabledFeatures        = &enabled_features,
   };
 
-  VK_EXPECT_SUCCESS(vkCreateDevice(engine.physical_device, &create_info, engine.allocator, &engine.device));
-  assert(engine.device);
-  volkLoadDevice(engine.device);
+  VK_EXPECT_SUCCESS(vkCreateDevice(vk_engine.physical_device, &create_info, vk_engine.allocator, &vk_engine.device));
+  assert(vk_engine.device);
+  volkLoadDevice(vk_engine.device);
 
   // reset queue_bit for reuse
   queue_bit = 0;
@@ -297,7 +267,7 @@ static void vk_create_device(void) {
     uint8_t last_queue_bit = queue_bit;
     b8 supports_graphics_queue = (queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT;
     b8 supports_compute_queue = (queue_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT;
-    b8 supports_present_queue = SDL_Vulkan_GetPresentationSupport(engine.instance, engine.physical_device, i);
+    b8 supports_present_queue = SDL_Vulkan_GetPresentationSupport(vk_engine.instance, vk_engine.physical_device, i);
 
     if(supports_graphics_queue) queue_bit |= graphics_bit;
     if(supports_compute_queue)  queue_bit |= compute_bit;
@@ -306,12 +276,12 @@ static void vk_create_device(void) {
     if(last_queue_bit != queue_bit) {
       VkQueue queue = 0;
       // @TODO: figure out whats happening here.
-      vkGetDeviceQueue(engine.device, i, 0, &queue);
+      vkGetDeviceQueue(vk_engine.device, i, 0, &queue);
       assert(queue);
 
-      if(supports_graphics_queue) engine.graphics_queue = queue;
-      if(supports_compute_queue)  engine.compute_queue = queue;
-      if(supports_present_queue)  engine.present_queue = queue;
+      if(supports_graphics_queue) vk_engine.graphics_queue = queue;
+      if(supports_compute_queue)  vk_engine.compute_queue = queue;
+      if(supports_present_queue)  vk_engine.present_queue = queue;
     }
 
     if(queue_bit == ideal) break;
@@ -321,7 +291,7 @@ static void vk_create_device(void) {
 
 static void vk_create_or_recreate_swapchain(Window *window) {
   VkSurfaceCapabilitiesKHR surface_capabilities = {0};
-  VK_EXPECT_SUCCESS(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(engine.physical_device, window->surface, &surface_capabilities));
+  VK_EXPECT_SUCCESS(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_engine.physical_device, window->surface, &surface_capabilities));
 
   VkExtent2D extent = surface_capabilities.currentExtent;
   if (surface_capabilities.currentExtent.width == 0xFFFFFFFF) {
@@ -354,20 +324,24 @@ static void vk_create_or_recreate_swapchain(Window *window) {
     .oldSwapchain          = window->sc,
   };
 
-  VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(engine.device, &create_info, engine.allocator, &window->sc));
+  VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(vk_engine.device, &create_info, vk_engine.allocator, &window->sc));
 
   // clean up past window stuff.
-  for(uint32_t i = 0; i < window->d_count; ++i) vkDestroyImageView(engine.device, window->d[i].view, engine.allocator);
+  for(uint32_t i = 0; i < window->d_count; ++i) {
+    vkDestroyImageView(vk_engine.device, window->d[i].view, vk_engine.allocator);
+    vkDestroyFence(vk_engine.device, window->d[i].fence, vk_engine.allocator);
+    vkDestroySemaphore(vk_engine.device, window->d[i].render_sem, vk_engine.allocator);
+    vkDestroySemaphore(vk_engine.device, window->d[i].present_sem, vk_engine.allocator);
+  }
 
   // we want to clean up everything here as well so that we don't leak. In the future we could probably keep those stuff until it needs
   // to disappear like a bin.
   mb_arena_clear(window->arena);
-
-  vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count,  0);
+  VK_EXPECT_SUCCESS(vkGetSwapchainImagesKHR(vk_engine.device, window->sc, &window->d_count,  0));
 
   mb_TempArena temp = mb_begin_temp_arena(0);
   VkImage *images = mb_arena_push(temp.arena, VkImage, .count = window->d_count);
-  vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count, images);
+  VK_EXPECT_SUCCESS(vkGetSwapchainImagesKHR(vk_engine.device, window->sc, &window->d_count, images));
 
 
   // @TODO: this needs to change when we decide to recreate stuff. But for now we can just leak lol.
@@ -396,7 +370,23 @@ static void vk_create_or_recreate_swapchain(Window *window) {
         .layerCount = 1,
       }
     };
-    vkCreateImageView(engine.device, &v_create_info, engine.allocator, &window->d[i].view);
+
+    VK_EXPECT_SUCCESS(vkCreateImageView(vk_engine.device, &v_create_info, vk_engine.allocator, &window->d[i].view));
+
+    VkFenceCreateInfo fence_create_info = {
+      .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+      .pNext = 0,
+      .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+    VK_EXPECT_SUCCESS(vkCreateFence(vk_engine.device, &fence_create_info, vk_engine.allocator, &window->d[i].fence));
+
+    VkSemaphoreCreateInfo semaphore_create_info = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+      .pNext = 0,
+      .flags = 0,
+    };
+    VK_EXPECT_SUCCESS(vkCreateSemaphore(vk_engine.device, &semaphore_create_info, vk_engine.allocator, &window->d[i].present_sem));
+    VK_EXPECT_SUCCESS(vkCreateSemaphore(vk_engine.device, &semaphore_create_info, vk_engine.allocator, &window->d[i].render_sem));
 
     // VkFramebufferCreateFlags flags = 0;
     // VkFramebufferCreateInfo f_create_info = {
@@ -418,12 +408,12 @@ void initialize_vulkan(void) {
   SDL_Vulkan_LoadLibrary(NULL);
   VK_EXPECT_SUCCESS(volkInitialize());
   vk_create_instance();
-  volkLoadInstance(engine.instance);
+  volkLoadInstance(vk_engine.instance);
   vk_create_debug_utils_messenger();
   vk_choose_physical_device();
 
   VkPhysicalDeviceProperties physical_device_properties = {0};
-  vkGetPhysicalDeviceProperties(engine.physical_device, &physical_device_properties);
+  vkGetPhysicalDeviceProperties(vk_engine.physical_device, &physical_device_properties);
   fprintf(stdout, "Chosen physical device :%s\n", physical_device_properties.deviceName);
   vk_create_device();
 
@@ -434,22 +424,22 @@ void initialize_vulkan(void) {
   };
   VmaAllocatorCreateInfo vma_create_info = {
     .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-    .physicalDevice = engine.physical_device,
-    .device = engine.device,
+    .physicalDevice = vk_engine.physical_device,
+    .device = vk_engine.device,
     .pVulkanFunctions = &vk_functions,
-    .instance = engine.instance,
+    .instance = vk_engine.instance,
     .vulkanApiVersion = VK_API_VERSION_1_4,
   };
-  VK_EXPECT_SUCCESS(vmaCreateAllocator(&vma_create_info, &engine.vma));
+  VK_EXPECT_SUCCESS(vmaCreateAllocator(&vma_create_info, &vk_engine.vma));
 }
 
 void cleanup_vulkan(void) {
-  VK_EXPECT_SUCCESS(vkDeviceWaitIdle(engine.device));
+  VK_EXPECT_SUCCESS(vkDeviceWaitIdle(vk_engine.device));
 
-  vmaDestroyAllocator(engine.vma);
-  vkDestroyDevice(engine.device, engine.allocator);
-  vkDestroyDebugUtilsMessengerEXT(engine.instance, engine.debug, engine.allocator);
-  vkDestroyInstance(engine.instance, engine.allocator);
+  vmaDestroyAllocator(vk_engine.vma);
+  vkDestroyDevice(vk_engine.device, vk_engine.allocator);
+  vkDestroyDebugUtilsMessengerEXT(vk_engine.instance, vk_engine.debug, vk_engine.allocator);
+  vkDestroyInstance(vk_engine.instance, vk_engine.allocator);
 }
 
 // @TODO: we can change this to just create window and then from there initialize vulkan if we have not.
@@ -465,12 +455,27 @@ Window create_window(SDL_Window *sdl) {
 void destroy_window(Window *window) {
   assert(window);
   // @TODO: figure out a good way to cleanup.
-  VK_EXPECT_SUCCESS(vkDeviceWaitIdle(engine.device));
+  VK_EXPECT_SUCCESS(vkDeviceWaitIdle(vk_engine.device));
 
   // clean up past window stuff.
-  for(uint32_t i = 0; i < window->d_count; ++i) vkDestroyImageView(engine.device, window->d[i].view, engine.allocator);
+  for(uint32_t i = 0; i < window->d_count; ++i) {
+    vkDestroyImageView(vk_engine.device, window->d[i].view, vk_engine.allocator);
+    vkDestroyFence(vk_engine.device, window->d[i].fence, vk_engine.allocator);
+    vkDestroySemaphore(vk_engine.device, window->d[i].render_sem, vk_engine.allocator);
+    vkDestroySemaphore(vk_engine.device, window->d[i].present_sem, vk_engine.allocator);
+  }
 
-  vkDestroySwapchainKHR(engine.device, window->sc, engine.allocator);
-  SDL_Vulkan_DestroySurface(engine.instance, window->surface, engine.allocator);
+  vkDestroySwapchainKHR(vk_engine.device, window->sc, vk_engine.allocator);
+  SDL_Vulkan_DestroySurface(vk_engine.instance, window->surface, vk_engine.allocator);
   mb_arena_destroy(window->arena);
 }
+
+const char *vk_result_to_string(VkResult result) {
+  switch(result) {
+#define X(result) case result: return #result;
+    VK_RESULT_LIST
+#undef X
+  }
+  return "VkResultUnknown";
+}
+
