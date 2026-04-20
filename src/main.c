@@ -57,18 +57,47 @@ static int window_application() {
   return 0;
 }
 
+
+mb_StringView read_glsl_and_compile_to_spv(mb_Arena *arena, mb_StringView file_name, shaderc_shader_kind kind,
+    shaderc_compiler_t sc_compiler, shaderc_compile_options_t sc_options) {
+  mb_File file = mb_open_file(file_name, mb_FileOpenMode_Text);
+  assert(file);
+
+  mb_TempArena temp = mb_begin_temp_arena(mb_get_scratch_arena(arena));
+  mb_StringView str_view = {0};
+  mb_StringView shader_str = mb_file_read_bytes(arena, file);
+
+  shaderc_compilation_result_t sc_result = shaderc_compile_into_spv(sc_compiler, shader_str.data, shader_str.count, kind, "placeholder", "main", sc_options);
+
+  if(shaderc_result_get_num_errors(sc_result) == 0) {
+    // @TODO: need to copy over.
+    str_view = (mb_StringView) {
+        .data = (char *)shaderc_result_get_bytes(sc_result),
+        .count = shaderc_result_get_length(sc_result),
+    };
+  } else {
+    fprintf(stdout, "Error compiling shader: %s\n", shaderc_result_get_error_message(sc_result));
+  }
+
+  shaderc_result_release(sc_result);
+  mb_end_temp_arena(&temp);
+  return str_view;
+}
+
+
 int main() {
 #if 0
   return window_application();
 #else
+  // compile spv
   shaderc_compiler_t sc_compiler = shaderc_compiler_initialize();
   shaderc_compile_options_t sc_options = shaderc_compile_options_initialize();
   shaderc_compile_options_set_source_language(sc_options, shaderc_source_language_glsl);
   shaderc_compile_options_set_optimization_level(sc_options, shaderc_optimization_level_performance);
   shaderc_compile_options_set_generate_debug_info(sc_options);
 
-  mb_File vert_file = mb_open_file(mb_str_from_cstr("data/shaders/color.vert"), 0);
-  mb_File frag_file = mb_open_file(mb_str_from_cstr("data/shaders/color.frag"), 0);
+  mb_File vert_file = mb_open_file(mb_str_from_cstr("data/shaders/color.vert"), mb_FileOpenMode_Text);
+  mb_File frag_file = mb_open_file(mb_str_from_cstr("data/shaders/color.frag"), mb_FileOpenMode_Text);
   assert(vert_file);
   assert(frag_file);
 
@@ -80,19 +109,21 @@ int main() {
   shaderc_compilation_result_t sc_frag_result = shaderc_compile_into_spv(sc_compiler, frag_shader.data, frag_shader.count, shaderc_glsl_fragment_shader, "color.frag", "main", sc_options);
 
   if(shaderc_result_get_num_errors(sc_vert_result) == 0) {
-    size_t sc_vert_length = shaderc_result_get_length(sc_vert_result);
-    // const char *sc_vert_result_bytes = shaderc_result_get_bytes(sc_vert_result);
-    fprintf(stdout, "Size of vertex shader: %zu\n", sc_vert_length);
-    // @bookmark
+    mb_File spv_vert_file = mb_open_file(mb_str_from_cstr("data/shaders/color.vert.spv"), mb_FileOpenMode_Write);
+    mb_file_write_bytes(spv_vert_file, (mb_StringView) {
+        .data = (char *)shaderc_result_get_bytes(sc_vert_result),
+        .count = shaderc_result_get_length(sc_vert_result),
+    });
   } else {
     fprintf(stdout, "Error compiling vert shader: %s\n", shaderc_result_get_error_message(sc_vert_result));
   }
 
   if(shaderc_result_get_num_errors(sc_frag_result) == 0) {
-    size_t sc_frag_length = shaderc_result_get_length(sc_frag_result);
-    // const char *sc_frag_result_bytes = shaderc_result_get_bytes(sc_frag_result);
-    fprintf(stdout, "Size of fragment shader: %zu\n", sc_frag_length);
-    // @bookmark
+    mb_File spv_frag_file = mb_open_file(mb_str_from_cstr("data/shaders/color.frag.spv"), mb_FileOpenMode_Write);
+    mb_file_write_bytes(spv_frag_file, (mb_StringView) {
+        .data = (char *)shaderc_result_get_bytes(sc_frag_result),
+        .count = shaderc_result_get_length(sc_frag_result),
+    });
   } else {
     fprintf(stdout, "Error compiling frag shader: %s\n", shaderc_result_get_error_message(sc_frag_result));
   }

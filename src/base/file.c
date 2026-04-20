@@ -7,8 +7,8 @@
 // @TODO: migrate all these to OS based functions.
 mb_File mb_open_file(mb_StringView str, mb_FileOpenMode open_mode) {
   mb_File fptr = NULL;
-  mb_Arena *scratch = mb_get_scratch_arena();
-  const char *file = mb_str_to_cstr(scratch, str);
+  mb_TempArena temp = mb_begin_temp_arena(0);
+  const char *file = mb_str_to_cstr(temp.arena, str);
   char param[3] = {
     ((open_mode & mb_FileOpenMode_Write) == mb_FileOpenMode_Write) ? 'w' : 'r',
     ((open_mode & mb_FileOpenMode_Text) == mb_FileOpenMode_Text) ? 0 : 'b' };
@@ -17,6 +17,7 @@ mb_File mb_open_file(mb_StringView str, mb_FileOpenMode open_mode) {
 #else
   fptr = fopen(file, param);
 #endif
+  mb_end_temp_arena(&temp);
   return fptr;
 }
 
@@ -32,13 +33,27 @@ mb_StringView mb_file_read_bytes(mb_Arena *arena, mb_File file) {
   size_t file_length = ftell(file);
   rewind(file);
 
+  size_t last_offset = arena->offset;
   char *data = mb_arena_push(arena, char, .count = file_length);
   size_t result = fread(data, sizeof(char), file_length, file);
-  assert(result == file_length);
+  if(result != file_length) {
+    // @TODO: change to trace logging.
+    fprintf(stdout, "File length not the same, expected=%zu, got=%zu. Reallocing... \n", file_length, result);
+    mb_arena_pop_to(arena, last_offset);
+    // realloc here.
+    data = mb_arena_push(arena, char, .count = result);
+    file_length = result;
+  }
   return (mb_StringView) {
     .data = data,
     .count = file_length,
   };
+}
+
+void mb_file_write_bytes(mb_File file, mb_StringView data) {
+  // @TODO: figure out if there is an issue with LE / BE.
+  fprintf(stdout, "writing %zu size to file\n", data.count);
+  fwrite(data.data, sizeof(char), data.count, file);
 }
 
 

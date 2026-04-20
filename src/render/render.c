@@ -129,7 +129,7 @@ static void vk_create_instance(void) {
   uint32_t layer_count = 0;
   const char *layer_names[1] = {"VK_LAYER_KHRONOS_validation"};
 
-  mb_TempArena arena = mb_begin_temp_arena(mb_get_scratch_arena());
+  mb_TempArena arena = mb_begin_temp_arena(0);
   VkLayerProperties *properties = mb_arena_push(arena.arena, VkLayerProperties, .count = max_layer_count);
   vkEnumerateInstanceLayerProperties(&max_layer_count, properties);
 
@@ -189,7 +189,7 @@ static void vk_choose_physical_device() {
   uint32_t count = 0;
   vkEnumeratePhysicalDevices(engine.instance, &count, 0);
 
-  mb_TempArena temp = mb_begin_temp_arena(mb_get_scratch_arena());
+  mb_TempArena temp = mb_begin_temp_arena(0);
 
   VkPhysicalDevice *pd = mb_arena_push(temp.arena, VkPhysicalDevice, .count = count);
   vkEnumeratePhysicalDevices(engine.instance, &count, pd);
@@ -228,7 +228,7 @@ static void vk_choose_physical_device() {
 }
 
 static void vk_create_device(void) {
-  mb_TempArena temp = mb_begin_temp_arena(mb_get_scratch_arena());
+  mb_TempArena temp = mb_begin_temp_arena(0);
 
   uint32_t queue_count = 0;
   vkGetPhysicalDeviceQueueFamilyProperties(engine.physical_device, &queue_count, 0);
@@ -365,7 +365,7 @@ static void vk_create_or_recreate_swapchain(Window *window) {
 
   vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count,  0);
 
-  mb_TempArena temp = mb_begin_temp_arena(mb_get_scratch_arena());
+  mb_TempArena temp = mb_begin_temp_arena(0);
   VkImage *images = mb_arena_push(temp.arena, VkImage, .count = window->d_count);
   vkGetSwapchainImagesKHR(engine.device, window->sc, &window->d_count, images);
 

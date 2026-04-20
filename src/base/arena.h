@@ -21,6 +21,7 @@ typedef struct {
 } mb_ArenaPushParams;
 
 mb_Arena *mb_arena_create(size_t size, size_t reserve_size);
+void mb_arena_create_inplace(mb_Arena * arena, size_t size, size_t reserve_size);
 void      mb_arena_destroy(mb_Arena *arena);
 
 void *mb_arena_push_raw(mb_Arena *arena, size_t size, size_t alignment, const mb_ArenaPushParams *params);
@@ -32,7 +33,8 @@ typedef struct mb_TempArena {
   size_t offset;
 } mb_TempArena;
 
-mb_Arena *mb_get_scratch_arena(void);
+mb_Arena *mb_get_scratch_arena(mb_Arena *arena);
+void      mb_scratch_clear_all(void);
 
 mb_TempArena mb_begin_temp_arena(mb_Arena *arena);
 void         mb_end_temp_arena(mb_TempArena *temp);

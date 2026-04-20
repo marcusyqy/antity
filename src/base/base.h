@@ -116,6 +116,14 @@
 #define MacroToString(x) #x
 #define mb_MarkNotImplemented(x) assert(!(x))
 
+#if COMPILER_MSVC
+#define threadlocal __declspec(thread)
+#elif COMPILER_CLANG || COMPILER_GCC
+#define threadlocal __thread
+#else
+#error platform not supported!
+#endif
+
 #if !CPP_LANG
 typedef uint8_t b8;
 #endif // !CPP_LANG

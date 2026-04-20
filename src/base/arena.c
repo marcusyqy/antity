@@ -4,22 +4,27 @@
 #include "os.h"
 
 mb_Arena *mb_arena_create(size_t size, size_t reserve_size) {
-  assert(size <= reserve_size);
-  void *buf = mb_os_reserve_memory(reserve_size);
-  mb_os_commit_memory(buf, size);
-  assert(buf);
-
-  mb_Arena arena = {
-    .block = (mb_MemoryBlock){ .buf = buf, .size = size },
-    .reserved_size = reserve_size,
-    .offset = 0,
-  };
+  mb_Arena arena;
+  mb_arena_create_inplace(&arena, size, reserve_size);
 
   // @TODO: should we do this? Seems excessive but helps with the API more.
   // push the arena on the allocated memory instead.
   mb_Arena *ptr = mb_arena_push(&arena, mb_Arena);
   MemoryCopy(ptr, &arena, sizeof(mb_Arena));
   return ptr;
+}
+
+void mb_arena_create_inplace(mb_Arena * arena, size_t size, size_t reserve_size) {
+  assert(size <= reserve_size);
+  void *buf = mb_os_reserve_memory(reserve_size);
+  mb_os_commit_memory(buf, size);
+  assert(buf);
+
+  *arena = (mb_Arena){
+    .block = (mb_MemoryBlock){ .buf = buf, .size = size },
+    .reserved_size = reserve_size,
+    .offset = 0,
+  };
 }
 
 void mb_arena_destroy(mb_Arena *arena) {
@@ -57,19 +62,39 @@ void mb_arena_clear(mb_Arena *arena) {
   arena->offset = 0;
 }
 
+#define MAX_SCRATCH_ARENA_DEPTH 3
 #define MB_SCRATCH_ARENA_SIZE MB(10)
-static mb_Arena *_mb_arena_private_scratch_;
+threadlocal static mb_Arena _mb_arena_private_scratch_[MAX_SCRATCH_ARENA_DEPTH];
 
-// @TODO: we need to figure out when we need to do conflict resolutions.
-mb_Arena *mb_get_scratch_arena(void) {
-  if(_mb_arena_private_scratch_ == NULL) {
-    _mb_arena_private_scratch_ = mb_arena_create(0, MB_SCRATCH_ARENA_SIZE);
+// @TODO: we need to figure out when we need to do more conflict resolutions, right now we assume that
+// depth of the arena will be 0 -> 1 -> 2.
+// That means that we expect to get an arena in order. Which also means that lifetimes cannot be jumbled somewhat.
+// This might be okay for a temporary storage mechanism.
+mb_Arena *mb_get_scratch_arena(mb_Arena *arena) {
+  ptrdiff_t offset = 0;
+  if(arena) {
+    ptrdiff_t actual_offset = arena - _mb_arena_private_scratch_;
+    // might be better to just leave it as 0? In the future this could bite us if we don't use a temp arena for conflict.
+    assert(actual_offset + 1 != MAX_SCRATCH_ARENA_DEPTH);
+    if(actual_offset >= 0 && actual_offset + 1 < MAX_SCRATCH_ARENA_DEPTH) {
+      offset = actual_offset + 1;
+    }
   }
-  return _mb_arena_private_scratch_;
+
+  if(!_mb_arena_private_scratch_[offset].reserved_size) {
+    mb_arena_create_inplace(_mb_arena_private_scratch_ + offset, 0, MB_SCRATCH_ARENA_SIZE);
+  }
+  return _mb_arena_private_scratch_ + offset;
+}
+
+void mb_scratch_clear_all(void) {
+  for(size_t i = 0; i < MAX_SCRATCH_ARENA_DEPTH; ++i) {
+    mb_arena_clear(_mb_arena_private_scratch_ + i);
+  }
 }
 
 mb_TempArena mb_begin_temp_arena(mb_Arena *arena) {
-  if(!arena) arena = mb_get_scratch_arena();
+  if(!arena) arena = mb_get_scratch_arena(0);
   return (mb_TempArena) { .arena = arena, .offset = arena->offset };
 }
 

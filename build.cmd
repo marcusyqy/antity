@@ -29,7 +29,7 @@ set INCLUDE_FLAGS=-external:I..\third_party\SDL\include /I..\src -external:I..\t
 REM -external:I%VULKAN_SDK%\Include
 
 pushd .build
-call %CC% %COMPILE_FLAGS% %DEFINE_FLAGS% %INCLUDE_FLAGS% ..\src\main.c /Fe:game.exe %LINK_FLAGS% || (
+call %CC% %COMPILE_FLAGS% %DEFINE_FLAGS% %INCLUDE_FLAGS% ..\src\build.c /Fe:game.exe %LINK_FLAGS% || (
   del game.exe
   exit /b 1
 )
