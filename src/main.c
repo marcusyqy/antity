@@ -1,6 +1,5 @@
 #include "base/base.h"
 #include "base/arena.h"
-#include "base/file.h"
 #include <stdio.h>
 #include <SDL3/SDL.h>
 #include <stdint.h>
@@ -218,6 +217,11 @@ static RenderPipeline create_default_render_pipeline(void) {
   return rp;
 }
 
+void render_pipeline_destroy(RenderPipeline *rp) {
+  vkDestroyPipeline(vk_engine.device, rp->handle, vk_engine.allocator);
+  vkDestroyPipelineLayout(vk_engine.device, rp->layout, vk_engine.allocator);
+}
+
 static int window_application() {
   if(!SDL_Init(SDL_INIT_VIDEO)) fprintf(stderr, "Failed to initialize SDL3: %s\n", SDL_GetError());
   SDL_SetHint(SDL_HINT_RENDER_DRIVER, "vulkan");
@@ -245,6 +249,7 @@ static int window_application() {
 
   RenderPipeline rp = create_default_render_pipeline();
   (void)rp;
+  // @bookmark we need to do the rendering now.
 
   SDL_Event event = {0};
   b8 running = 1;
@@ -263,8 +268,7 @@ static int window_application() {
   }
 
   destroy_window(&window);
-  vkDestroyPipeline(vk_engine.device, rp.handle, vk_engine.allocator);
-  vkDestroyPipelineLayout(vk_engine.device, rp.layout, vk_engine.allocator);
+  render_pipeline_destroy(&rp);
   SDL_DestroyWindow(window.sdl);
   cleanup_vulkan();
   SDL_Quit();
@@ -272,28 +276,10 @@ static int window_application() {
 }
 
 int main() {
-#if 1
+#ifndef TESTING
   return window_application();
 #else
-  ShadercInfo sc = shader_compiler_create();
-  // compile spv
-  mb_TempArena temp = mb_begin_temp_arena(0);
-  mb_StringView spv_vert_shader = shader_compiler_read_glsl_and_compile_to_spv(temp.arena, &sc, mb_str_from_cstr("data/shaders/color.vert"), shaderc_glsl_vertex_shader);
-  mb_StringView spv_frag_shader = shader_compiler_read_glsl_and_compile_to_spv(temp.arena, &sc, mb_str_from_cstr("data/shaders/color.frag"), shaderc_glsl_fragment_shader);
-  if(spv_vert_shader.count) {
-    mb_File spv_vert_file = mb_open_file(mb_str_from_cstr("data/shaders/color.vert.spv"), mb_FileOpenMode_Write);
-    mb_file_write_bytes(spv_vert_file, spv_vert_shader);
-    mb_close_file(spv_vert_file);
-  }
 
-  if(spv_frag_shader.count) {
-    mb_File spv_frag_file = mb_open_file(mb_str_from_cstr("data/shaders/color.frag.spv"), mb_FileOpenMode_Write);
-    mb_file_write_bytes(spv_frag_file, spv_frag_shader);
-    mb_close_file(spv_frag_file);
-  }
-
-  mb_end_temp_arena(&temp);
-  shader_compiler_destroy(&sc);
 #endif
 }
 
