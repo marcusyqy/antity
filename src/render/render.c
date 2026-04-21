@@ -387,19 +387,6 @@ static void vk_create_or_recreate_swapchain(Window *window) {
     };
     VK_EXPECT_SUCCESS(vkCreateSemaphore(vk_engine.device, &semaphore_create_info, vk_engine.allocator, &window->d[i].present_sem));
     VK_EXPECT_SUCCESS(vkCreateSemaphore(vk_engine.device, &semaphore_create_info, vk_engine.allocator, &window->d[i].render_sem));
-
-    // VkFramebufferCreateFlags flags = 0;
-    // VkFramebufferCreateInfo f_create_info = {
-    // .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-    // .pNext = 0,
-    // .flags = 0,
-    // VkRenderPass                renderPass;
-    // uint32_t                    attachmentCount;
-    // const VkImageView*          pAttachments;
-    // uint32_t                    width;
-    // uint32_t                    height;
-    // uint32_t                    layers;
-    // };
   }
   mb_end_temp_arena(&temp);
 }
