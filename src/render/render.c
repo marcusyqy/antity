@@ -327,8 +327,11 @@ static void vk_create_or_recreate_swapchain(Window *window) {
   VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(vk_engine.device, &create_info, vk_engine.allocator, &window->sc));
 
   // clean up past window stuff.
-  for(uint32_t i = 0; i < window->d_count; ++i) {
-    vkDestroyImageView(vk_engine.device, window->d[i].view, vk_engine.allocator);
+  for(uint32_t i = 0; i < window->v_count; ++i) {
+    vkDestroyImageView(vk_engine.device, window->image_views[i], vk_engine.allocator);
+  }
+
+  for(uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
     vkDestroyFence(vk_engine.device, window->d[i].fence, vk_engine.allocator);
     vkDestroySemaphore(vk_engine.device, window->d[i].render_sem, vk_engine.allocator);
     vkDestroySemaphore(vk_engine.device, window->d[i].present_sem, vk_engine.allocator);
@@ -337,23 +340,20 @@ static void vk_create_or_recreate_swapchain(Window *window) {
   // we want to clean up everything here as well so that we don't leak. In the future we could probably keep those stuff until it needs
   // to disappear like a bin.
   mb_arena_clear(window->arena);
-  VK_EXPECT_SUCCESS(vkGetSwapchainImagesKHR(vk_engine.device, window->sc, &window->d_count,  0));
+  VK_EXPECT_SUCCESS(vkGetSwapchainImagesKHR(vk_engine.device, window->sc, &window->v_count,  0));
 
   mb_TempArena temp = mb_begin_temp_arena(0);
-  VkImage *images = mb_arena_push(temp.arena, VkImage, .count = window->d_count);
-  VK_EXPECT_SUCCESS(vkGetSwapchainImagesKHR(vk_engine.device, window->sc, &window->d_count, images));
-
+  window->images = mb_arena_push(window->arena, VkImage, .count = window->v_count);
+  VK_EXPECT_SUCCESS(vkGetSwapchainImagesKHR(vk_engine.device, window->sc, &window->v_count, window->images));
 
   // @TODO: this needs to change when we decide to recreate stuff. But for now we can just leak lol.
-  window->d = mb_arena_push(window->arena, WindowDynData, .count = window->d_count);
-  for(uint32_t i = 0; i < window->d_count; ++i) {
-    window->d[i].image = images[i];
-
+  window->image_views = mb_arena_push(window->arena, VkImageView, .count = window->v_count);
+  for(uint32_t i = 0; i < window->v_count; ++i) {
     VkImageViewCreateInfo v_create_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .pNext = 0,
       .flags = 0,
-      .image = window->d[i].image,
+      .image = window->images[i],
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
       .format = image_format,
       .components = (VkComponentMapping) {
@@ -371,8 +371,18 @@ static void vk_create_or_recreate_swapchain(Window *window) {
       }
     };
 
-    VK_EXPECT_SUCCESS(vkCreateImageView(vk_engine.device, &v_create_info, vk_engine.allocator, &window->d[i].view));
+    VK_EXPECT_SUCCESS(vkCreateImageView(vk_engine.device, &v_create_info, vk_engine.allocator, &window->image_views[i]));
+  }
 
+  VkCommandPoolCreateInfo command_pool_create_info = {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .pNext = 0,
+    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+    .queueFamilyIndex = vk_engine.queue_family_index,
+  };
+  VK_EXPECT_SUCCESS(vkCreateCommandPool(vk_engine.device, &command_pool_create_info, vk_engine.allocator, &window->cmd_pool));
+
+  for(uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
     VkFenceCreateInfo fence_create_info = {
       .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
       .pNext = 0,
@@ -387,6 +397,7 @@ static void vk_create_or_recreate_swapchain(Window *window) {
     };
     VK_EXPECT_SUCCESS(vkCreateSemaphore(vk_engine.device, &semaphore_create_info, vk_engine.allocator, &window->d[i].present_sem));
     VK_EXPECT_SUCCESS(vkCreateSemaphore(vk_engine.device, &semaphore_create_info, vk_engine.allocator, &window->d[i].render_sem));
+
   }
   mb_end_temp_arena(&temp);
 }
@@ -445,8 +456,11 @@ void destroy_window(Window *window) {
   VK_EXPECT_SUCCESS(vkDeviceWaitIdle(vk_engine.device));
 
   // clean up past window stuff.
-  for(uint32_t i = 0; i < window->d_count; ++i) {
-    vkDestroyImageView(vk_engine.device, window->d[i].view, vk_engine.allocator);
+  for(uint32_t i = 0; i < window->v_count; ++i) {
+    vkDestroyImageView(vk_engine.device, window->image_views[i], vk_engine.allocator);
+  }
+
+  for(uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
     vkDestroyFence(vk_engine.device, window->d[i].fence, vk_engine.allocator);
     vkDestroySemaphore(vk_engine.device, window->d[i].render_sem, vk_engine.allocator);
     vkDestroySemaphore(vk_engine.device, window->d[i].present_sem, vk_engine.allocator);

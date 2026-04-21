@@ -6,6 +6,8 @@
 #include "base/arena.h"
 #include <vma/vk_mem_alloc.h>
 
+#define VK_MAX_FRAMES_IN_FLIGHT 2
+
 typedef struct VulkanResourceEngine {
   VkAllocationCallbacks    *allocator;
   VkInstance               instance;
@@ -16,27 +18,34 @@ typedef struct VulkanResourceEngine {
   VkQueue                  graphics_queue;
   VkQueue                  compute_queue;
   VmaAllocator             vma;
+
+  uint32_t                 queue_family_index;
 } VulkanResourceEngine;
 
 extern VulkanResourceEngine vk_engine;
 
 typedef struct WindowDynData {
-  VkImage image;
-  VkImageView view;
-  VkFramebuffer fb;
   VkFence fence;
   VkSemaphore present_sem;
   VkSemaphore render_sem;
+
+  VkCommandBuffer cmd_buf;
 } WindowDynData;
 
 typedef struct Window {
-  SDL_Window    *sdl;
-  mb_Arena      *arena;
-  VkSurfaceKHR   surface;
-  VkSwapchainKHR sc;
+  SDL_Window     *sdl;
+  mb_Arena       *arena;
+  VkSurfaceKHR    surface;
+  VkSwapchainKHR  sc;
 
-  WindowDynData  *d;
-  uint32_t        d_count;
+  VkImage        *images;
+  VkImageView    *image_views;
+  uint32_t        v_count;
+
+  VkCommandPool   cmd_pool;
+
+  WindowDynData   d[VK_MAX_FRAMES_IN_FLIGHT];
+  uint32_t        curr_frame_idx;
 } Window;
 
 void initialize_vulkan();

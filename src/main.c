@@ -253,6 +253,7 @@ static int window_application() {
 
   SDL_Event event = {0};
   b8 running = 1;
+  b8 need_resize = 0;
   while(running) {
     while (SDL_PollEvent(&event)) {
       if(event.type == SDL_EVENT_QUIT) running = 0;
@@ -260,9 +261,25 @@ static int window_application() {
       if(event.type == SDL_EVENT_WINDOW_RESIZED && event.window.windowID == SDL_GetWindowID(window.sdl)) {
         window_width  = (uint32_t)event.window.data1;
         window_height = (uint32_t)event.window.data2;
+        need_resize = 1;
       }
       if(event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_Q) running = 0;
     }
+
+    if(need_resize) {
+      // doesn't need to do it now.
+      // resize swapchain here.
+      need_resize = 0;
+      continue;
+    }
+    WindowDynData *curr_data = &window.d[window.curr_frame_idx];
+
+    VK_EXPECT_SUCCESS(vkWaitForFences(vk_engine.device, 1, &curr_data->fence, 1, UINT64_MAX));
+    VK_EXPECT_SUCCESS(vkResetFences(vk_engine.device, 1, &curr_data->fence));
+
+    uint32_t image_idx = 0;
+    VK_EXPECT_SUCCESS(vkAcquireNextImageKHR(vk_engine.device, window.sc, UINT64_MAX, curr_data->present_sem, VK_NULL_HANDLE, &image_idx));
+
 
     SDL_GL_SwapWindow(window.sdl);
   }
