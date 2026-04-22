@@ -13,13 +13,11 @@ typedef struct VulkanResourceEngine {
   VkInstance               instance;
   VkDebugUtilsMessengerEXT debug;
   VkPhysicalDevice         physical_device;
-  VkDevice                 device;
-  VkQueue                  present_queue;
-  VkQueue                  graphics_queue;
-  VkQueue                  compute_queue;
-  VmaAllocator             vma;
-
   uint32_t                 queue_family_index;
+
+  VkDevice                 device;
+  VkQueue                  queue;
+  VmaAllocator             vma;
 } VulkanResourceEngine;
 
 extern VulkanResourceEngine vk_engine;

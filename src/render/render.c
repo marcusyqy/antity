@@ -173,21 +173,24 @@ static void vk_choose_physical_device() {
     VkQueueFamilyProperties *queue_props = mb_arena_push(scope_temp.arena, VkQueueFamilyProperties, .count = queue_count);
     vkGetPhysicalDeviceQueueFamilyProperties(pd[i], &queue_count, queue_props);
 
-    const uint8_t graphics_bit = 1 << 1;
-    const uint8_t compute_bit  = 1 << 2;
-    const uint8_t present_bit  = 1 << 3;
-    const uint8_t ideal        = graphics_bit | compute_bit | present_bit;
-
-    uint8_t queue_bit = 0;
+    // const uint8_t graphics_bit = 1 << 1;
+    // const uint8_t compute_bit  = 1 << 2;
+    // const uint8_t present_bit  = 1 << 3;
+    // const uint8_t ideal        = graphics_bit | compute_bit | present_bit;
+    //
+    // uint8_t queue_bit = 0;
+    b8 found_right_queue = 0;
     for(uint32_t j = 0; j < queue_count; ++j) {
-      if((queue_props[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT) queue_bit |= graphics_bit;
-      if((queue_props[j].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT)   queue_bit |= compute_bit;
-      if(SDL_Vulkan_GetPresentationSupport(vk_engine.instance, pd[i], j))              queue_bit |= present_bit;
-      if(ideal == queue_bit) break;
+      if(((queue_props[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT) &&
+         ((queue_props[j].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT) &&
+         (SDL_Vulkan_GetPresentationSupport(vk_engine.instance, pd[i], j))) {
+        found_right_queue = 1;
+        vk_engine.queue_family_index = j;
+      }
     }
     mb_end_temp_arena(&scope_temp);
 
-    if(ideal == queue_bit) {
+    if(found_right_queue) {
       vk_engine.physical_device = pd[i];
       break;
     }
@@ -206,33 +209,13 @@ static void vk_create_device(void) {
   VkQueueFamilyProperties *queue_props = mb_arena_push(temp.arena, VkQueueFamilyProperties, .count = queue_count);
   vkGetPhysicalDeviceQueueFamilyProperties(vk_engine.physical_device, &queue_count, queue_props);
 
-  VkDeviceQueueCreateInfo queue_create_info[VK_MAX_QUEUES] = {0};
-  uint32_t queue_create_info_count = 0;
-
   const float priority = 1.0f;
-
-  const uint8_t graphics_bit = 1 << 1;
-  const uint8_t compute_bit  = 1 << 2;
-  const uint8_t present_bit  = 1 << 3;
-  const uint8_t ideal        = graphics_bit | compute_bit | present_bit;
-
-  uint8_t queue_bit = 0;
-  for(uint32_t i = 0; i < queue_count; ++i) {
-    uint8_t last_queue_bit = queue_bit;
-    if((queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT)        queue_bit |= graphics_bit;
-    if((queue_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT)          queue_bit |= compute_bit;
-    if(SDL_Vulkan_GetPresentationSupport(vk_engine.instance, vk_engine.physical_device, i)) queue_bit |= present_bit;
-
-    if(last_queue_bit != queue_bit) {
-      queue_create_info[queue_create_info_count].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-      queue_create_info[queue_create_info_count].queueFamilyIndex = i;
-      queue_create_info[queue_create_info_count].queueCount = 1; // queue_props[i].queueCount;
-      queue_create_info[queue_create_info_count].pQueuePriorities = &priority;
-      queue_create_info_count++;
-    }
-
-    if(queue_bit == ideal) break;
-  }
+  VkDeviceQueueCreateInfo queue_create_info = {
+    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+    .queueFamilyIndex = vk_engine.queue_family_index,
+    .queueCount = 1, // queue_props[i].queueCount;
+    .pQueuePriorities = &priority,
+  };
 
   const char *enabled_extension[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
@@ -246,8 +229,8 @@ static void vk_create_device(void) {
     .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
     .pNext                   = &enabled_vk13_features,
     .flags                   = 0,
-    .queueCreateInfoCount    = queue_create_info_count,
-    .pQueueCreateInfos       = queue_create_info,
+    .queueCreateInfoCount    = 1,
+    .pQueueCreateInfos       = &queue_create_info,
     // @NOTE: enabledLayerCount is legacy and should not be used
     .enabledLayerCount       = 0,
     // @NOTE: ppEnabledLayerNames is legacy and should not be used
@@ -261,31 +244,9 @@ static void vk_create_device(void) {
   assert(vk_engine.device);
   volkLoadDevice(vk_engine.device);
 
-  // reset queue_bit for reuse
-  queue_bit = 0;
-  for(uint32_t i = 0; i < queue_count; ++i) {
-    uint8_t last_queue_bit = queue_bit;
-    b8 supports_graphics_queue = (queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT;
-    b8 supports_compute_queue = (queue_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT;
-    b8 supports_present_queue = SDL_Vulkan_GetPresentationSupport(vk_engine.instance, vk_engine.physical_device, i);
-
-    if(supports_graphics_queue) queue_bit |= graphics_bit;
-    if(supports_compute_queue)  queue_bit |= compute_bit;
-    if(supports_present_queue)  queue_bit |= present_bit;
-
-    if(last_queue_bit != queue_bit) {
-      VkQueue queue = 0;
-      // @TODO: figure out whats happening here.
-      vkGetDeviceQueue(vk_engine.device, i, 0, &queue);
-      assert(queue);
-
-      if(supports_graphics_queue) vk_engine.graphics_queue = queue;
-      if(supports_compute_queue)  vk_engine.compute_queue = queue;
-      if(supports_present_queue)  vk_engine.present_queue = queue;
-    }
-
-    if(queue_bit == ideal) break;
-  }
+  VkQueue queue;
+  // @TODO: figure out whats happening here.
+  vkGetDeviceQueue(vk_engine.device, vk_engine.queue_family_index, 0, &queue);
   mb_end_temp_arena(&temp);
 }
 
@@ -342,7 +303,6 @@ static void vk_create_or_recreate_swapchain(Window *window) {
   mb_arena_clear(window->arena);
   VK_EXPECT_SUCCESS(vkGetSwapchainImagesKHR(vk_engine.device, window->sc, &window->v_count,  0));
 
-  mb_TempArena temp = mb_begin_temp_arena(0);
   window->images = mb_arena_push(window->arena, VkImage, .count = window->v_count);
   VK_EXPECT_SUCCESS(vkGetSwapchainImagesKHR(vk_engine.device, window->sc, &window->v_count, window->images));
 
@@ -370,8 +330,7 @@ static void vk_create_or_recreate_swapchain(Window *window) {
         .layerCount = 1,
       }
     };
-
-    VK_EXPECT_SUCCESS(vkCreateImageView(vk_engine.device, &v_create_info, vk_engine.allocator, &window->image_views[i]));
+    VK_EXPECT_SUCCESS(vkCreateImageView(vk_engine.device, &v_create_info, vk_engine.allocator, window->image_views + i));
   }
 
   VkCommandPoolCreateInfo command_pool_create_info = {
@@ -389,7 +348,6 @@ static void vk_create_or_recreate_swapchain(Window *window) {
       .flags = VK_FENCE_CREATE_SIGNALED_BIT,
     };
     VK_EXPECT_SUCCESS(vkCreateFence(vk_engine.device, &fence_create_info, vk_engine.allocator, &window->d[i].fence));
-
     VkSemaphoreCreateInfo semaphore_create_info = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
       .pNext = 0,
@@ -397,9 +355,7 @@ static void vk_create_or_recreate_swapchain(Window *window) {
     };
     VK_EXPECT_SUCCESS(vkCreateSemaphore(vk_engine.device, &semaphore_create_info, vk_engine.allocator, &window->d[i].present_sem));
     VK_EXPECT_SUCCESS(vkCreateSemaphore(vk_engine.device, &semaphore_create_info, vk_engine.allocator, &window->d[i].render_sem));
-
   }
-  mb_end_temp_arena(&temp);
 }
 
 void initialize_vulkan(void) {
@@ -433,7 +389,6 @@ void initialize_vulkan(void) {
 
 void cleanup_vulkan(void) {
   VK_EXPECT_SUCCESS(vkDeviceWaitIdle(vk_engine.device));
-
   vmaDestroyAllocator(vk_engine.vma);
   vkDestroyDevice(vk_engine.device, vk_engine.allocator);
   vkDestroyDebugUtilsMessengerEXT(vk_engine.instance, vk_engine.debug, vk_engine.allocator);

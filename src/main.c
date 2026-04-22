@@ -272,14 +272,12 @@ static int window_application() {
       need_resize = 0;
       continue;
     }
-    WindowDynData *curr_data = &window.d[window.curr_frame_idx];
 
-    VK_EXPECT_SUCCESS(vkWaitForFences(vk_engine.device, 1, &curr_data->fence, 1, UINT64_MAX));
-    VK_EXPECT_SUCCESS(vkResetFences(vk_engine.device, 1, &curr_data->fence));
-
-    uint32_t image_idx = 0;
-    VK_EXPECT_SUCCESS(vkAcquireNextImageKHR(vk_engine.device, window.sc, UINT64_MAX, curr_data->present_sem, VK_NULL_HANDLE, &image_idx));
-
+    // WindowDynData *curr_data = &window.d[window.curr_frame_idx];
+    // VK_EXPECT_SUCCESS(vkWaitForFences(vk_engine.device, 1, &curr_data->fence, 1, UINT64_MAX));
+    // VK_EXPECT_SUCCESS(vkResetFences(vk_engine.device, 1, &curr_data->fence));
+    // uint32_t image_idx = 0;
+    // VK_EXPECT_SUCCESS(vkAcquireNextImageKHR(vk_engine.device, window.sc, UINT64_MAX, curr_data->present_sem, VK_NULL_HANDLE, &image_idx));
 
     SDL_GL_SwapWindow(window.sdl);
   }

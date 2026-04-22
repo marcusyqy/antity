@@ -13,6 +13,7 @@ typedef struct {
   mb_MemoryBlock block;
   size_t         offset;
   size_t         reserved_size;
+  size_t         hard_point;
 } mb_Arena;
 
 typedef struct {
@@ -21,7 +22,6 @@ typedef struct {
 } mb_ArenaPushParams;
 
 mb_Arena *mb_arena_create(size_t size, size_t reserve_size);
-void mb_arena_create_inplace(mb_Arena * arena, size_t size, size_t reserve_size);
 void      mb_arena_destroy(mb_Arena *arena);
 
 void *mb_arena_push_raw(mb_Arena *arena, size_t size, size_t alignment, const mb_ArenaPushParams *params);

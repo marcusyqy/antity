@@ -3,18 +3,7 @@
 #include <stddef.h>
 #include "os.h"
 
-mb_Arena *mb_arena_create(size_t size, size_t reserve_size) {
-  mb_Arena arena;
-  mb_arena_create_inplace(&arena, size, reserve_size);
-
-  // @TODO: should we do this? Seems excessive but helps with the API more.
-  // push the arena on the allocated memory instead.
-  mb_Arena *ptr = mb_arena_push(&arena, mb_Arena);
-  MemoryCopy(ptr, &arena, sizeof(mb_Arena));
-  return ptr;
-}
-
-void mb_arena_create_inplace(mb_Arena * arena, size_t size, size_t reserve_size) {
+static void mb_arena_create_inplace(mb_Arena * arena, size_t size, size_t reserve_size) {
   assert(size <= reserve_size);
   void *buf = mb_os_reserve_memory(reserve_size);
   mb_os_commit_memory(buf, size);
@@ -24,8 +13,23 @@ void mb_arena_create_inplace(mb_Arena * arena, size_t size, size_t reserve_size)
     .block = (mb_MemoryBlock){ .buf = buf, .size = size },
     .reserved_size = reserve_size,
     .offset = 0,
+    .hard_point = 0,
   };
 }
+
+mb_Arena *mb_arena_create(size_t size, size_t reserve_size) {
+  mb_Arena arena;
+  mb_arena_create_inplace(&arena, size, reserve_size);
+
+  // @TODO: should we do this? Seems excessive but helps with the API more.
+  // push the arena on the allocated memory instead.
+  mb_Arena *ptr = mb_arena_push(&arena, mb_Arena);
+  MemoryCopy(ptr, &arena, sizeof(mb_Arena));
+  // make sure it starts from here.
+  ptr->hard_point = ptr->offset;
+  return ptr;
+}
+
 
 void mb_arena_destroy(mb_Arena *arena) {
   assert(arena);
@@ -59,12 +63,12 @@ void mb_arena_pop_to(mb_Arena *arena, size_t offset) {
 }
 
 void mb_arena_clear(mb_Arena *arena) {
-  arena->offset = 0;
+  arena->offset = arena->hard_point;
 }
 
 #define MAX_SCRATCH_ARENA_DEPTH 3
-#define MB_SCRATCH_ARENA_SIZE MB(10)
-threadlocal static mb_Arena _mb_arena_private_scratch_[MAX_SCRATCH_ARENA_DEPTH];
+#define MB_SCRATCH_ARENA_SIZE MB(1)
+threadlocal static mb_Arena _mb_arena_private_scratch_[MAX_SCRATCH_ARENA_DEPTH] = {0};
 
 // @TODO: we need to figure out when we need to do more conflict resolutions, right now we assume that
 // depth of the arena will be 0 -> 1 -> 2.
@@ -82,7 +86,7 @@ mb_Arena *mb_get_scratch_arena(mb_Arena *arena) {
   }
 
   if(!_mb_arena_private_scratch_[offset].reserved_size) {
-    mb_arena_create_inplace(_mb_arena_private_scratch_ + offset, 0, MB_SCRATCH_ARENA_SIZE);
+       mb_arena_create_inplace(&_mb_arena_private_scratch_[offset], 0, MB_SCRATCH_ARENA_SIZE);
   }
   return _mb_arena_private_scratch_ + offset;
 }
