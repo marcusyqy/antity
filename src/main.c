@@ -266,12 +266,8 @@ static int window_application() {
       if(event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_Q) running = 0;
     }
 
-    if(need_resize) {
-      // doesn't need to do it now.
-      // resize swapchain here.
-      need_resize = 0;
-      continue;
-    }
+    // not implemented
+    assert(!need_resize);
 
     // WindowDynData *curr_data = &window.d[window.curr_frame_idx];
     // VK_EXPECT_SUCCESS(vkWaitForFences(vk_engine.device, 1, &curr_data->fence, 1, UINT64_MAX));
