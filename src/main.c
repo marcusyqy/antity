@@ -245,6 +245,7 @@ static int window_application() {
     SDL_Quit();
     return -1;
   }
+
   Window window = create_window(sdl);
 
   RenderPipeline rp = create_default_render_pipeline();
@@ -269,11 +270,46 @@ static int window_application() {
     // not implemented
     assert(!need_resize);
 
-    // WindowDynData *curr_data = &window.d[window.curr_frame_idx];
-    // VK_EXPECT_SUCCESS(vkWaitForFences(vk_engine.device, 1, &curr_data->fence, 1, UINT64_MAX));
-    // VK_EXPECT_SUCCESS(vkResetFences(vk_engine.device, 1, &curr_data->fence));
-    // uint32_t image_idx = 0;
-    // VK_EXPECT_SUCCESS(vkAcquireNextImageKHR(vk_engine.device, window.sc, UINT64_MAX, curr_data->present_sem, VK_NULL_HANDLE, &image_idx));
+    WindowDynData *curr_data = &window.d[window.curr_frame_idx];
+    VK_EXPECT_SUCCESS(vkWaitForFences(vk_engine.device, 1, &curr_data->fence, 1, UINT64_MAX));
+    VK_EXPECT_SUCCESS(vkResetFences(vk_engine.device, 1, &curr_data->fence));
+    uint32_t image_idx = 0;
+    VK_EXPECT_SUCCESS(vkAcquireNextImageKHR(vk_engine.device, window.sc, UINT64_MAX, curr_data->present_sem, VK_NULL_HANDLE, &image_idx));
+
+    VK_EXPECT_SUCCESS(vkResetCommandBuffer(curr_data->cmd_buf, 0));
+
+    VkCommandBufferBeginInfo cmd_begin_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT };
+    VK_EXPECT_SUCCESS(vkBeginCommandBuffer(curr_data->cmd_buf, &cmd_begin_info));
+
+    VkRenderingAttachmentInfo render_color_attachment = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .pNext = 0,
+      .imageView = window.image_views[image_idx],
+      .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+      .resolveMode = 0,
+      .resolveImageView = VK_NULL_HANDLE,
+      .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      .clearValue = { .color = { 0.f, 0.f, 0.f, 1.f } },
+    };
+    VkRenderingInfo rendering_info = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+      .pNext = 0,
+      .flags = 0,
+      .renderArea = { .extent = { .width = window_width, .height = window_height } },
+      .layerCount = 1,
+      .viewMask = 0,
+      .colorAttachmentCount = 1,
+      .pColorAttachments = &render_color_attachment,
+      .pDepthAttachment = 0,
+      .pStencilAttachment= 0,
+    };
+
+    DeferScope(vkCmdBeginRendering(curr_data->cmd_buf, &rendering_info),
+               vkCmdEndRendering(curr_data->cmd_buf))
+    {
+    }
 
     SDL_GL_SwapWindow(window.sdl);
   }

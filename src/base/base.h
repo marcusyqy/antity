@@ -103,8 +103,8 @@
 #define MACRO_SAME_LINE_ANONVAR(x) MACRO_CONCATENATE(x, __LINE__)
 
 // no format this please (nice macros)
-#define DeferBlock(begin, end)         for(int MACRO_SAME_LINE_ANONVAR(_i_)=((begin), 0); !MACRO_SAME_LINE_ANONVAR(_i_);++MACRO_SAME_LINE_ANONVAR(_i_), (end))
-#define DeferBlockChecked(begin, end) for(int MACRO_SAME_LINE_ANONVAR(_i_)=2*!(begin); (MACRO_SAME_LINE_ANONVAR(_i_)==2?((end), 0):!MACRO_SAME_LINE_ANONVAR(_i_));++MACRO_SAME_LINE_ANONVAR(_i_),(end))
+#define DeferScope(begin, end)         for(int MACRO_SAME_LINE_ANONVAR(_i_)=((begin), 0); !MACRO_SAME_LINE_ANONVAR(_i_);++MACRO_SAME_LINE_ANONVAR(_i_), (end))
+#define DeferScopeChecked(begin, end) for(int MACRO_SAME_LINE_ANONVAR(_i_)=2*!(begin); (MACRO_SAME_LINE_ANONVAR(_i_)==2?((end), 0):!MACRO_SAME_LINE_ANONVAR(_i_));++MACRO_SAME_LINE_ANONVAR(_i_),(end))
 
 #define FOREACH_ENUMVAL_EXCLUSIVE(enum_name, var) for(enum_name var = (enum_name)0; var < MACRO_CONCATENATE(enum_name, _COUNT); var = (enum_name)((int)var + 1))
 #define FOREACH_ENUMVAL FOREACH_ENUMVAL_EXCLUSIVE
