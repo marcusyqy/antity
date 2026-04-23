@@ -244,9 +244,7 @@ static void vk_create_device(void) {
   assert(vk_engine.device);
   volkLoadDevice(vk_engine.device);
 
-  VkQueue queue;
-  // @TODO: figure out whats happening here.
-  vkGetDeviceQueue(vk_engine.device, vk_engine.queue_family_index, 0, &queue);
+  vkGetDeviceQueue(vk_engine.device, vk_engine.queue_family_index, 0, &vk_engine.queue);
   mb_end_temp_arena(&temp);
 }
 

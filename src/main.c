@@ -119,7 +119,7 @@ static RenderPipeline create_default_render_pipeline(void) {
     .rasterizerDiscardEnable = 0,
     .polygonMode = VK_POLYGON_MODE_FILL,
     .cullMode = VK_CULL_MODE_NONE,
-    .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+    .frontFace = VK_FRONT_FACE_CLOCKWISE, // VK_FRONT_FACE_COUNTER_CLOCKWISE,
     .depthBiasEnable = 0,
     .depthBiasConstantFactor = 0.0f,
     .depthBiasClamp = 0.0f,
@@ -151,7 +151,7 @@ static RenderPipeline create_default_render_pipeline(void) {
     .front = (VkStencilOpState){0},
     .back = (VkStencilOpState){0},
     .minDepthBounds = 0.0f,
-    .maxDepthBounds = 0.0f,
+    .maxDepthBounds = 1.0f,
   };
 
   VkPipelineColorBlendAttachmentState color_blend_attachment_state = {
@@ -162,7 +162,10 @@ static RenderPipeline create_default_render_pipeline(void) {
     .srcAlphaBlendFactor = 0,
     .dstAlphaBlendFactor = 0,
     .alphaBlendOp = 0,
-    .colorWriteMask = 0,
+    .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                      VK_COLOR_COMPONENT_G_BIT |
+                      VK_COLOR_COMPONENT_B_BIT |
+                      VK_COLOR_COMPONENT_A_BIT,
 
   };
   VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {
@@ -247,7 +250,6 @@ static int window_application() {
   }
 
   Window window = create_window(sdl);
-
   RenderPipeline rp = create_default_render_pipeline();
   (void)rp;
   // @bookmark we need to do the rendering now.
@@ -281,6 +283,24 @@ static int window_application() {
     VkCommandBufferBeginInfo cmd_begin_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT };
     VK_EXPECT_SUCCESS(vkBeginCommandBuffer(curr_data->cmd_buf, &cmd_begin_info));
 
+    VkImageMemoryBarrier2 output_barrier = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+      .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .srcAccessMask = 0,
+      .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+      .image = window.images[image_idx],
+      .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1 }
+    };
+    VkDependencyInfo output_barrier_dependency_info = {
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+      .imageMemoryBarrierCount = 1,
+      .pImageMemoryBarriers = &output_barrier
+    };
+    vkCmdPipelineBarrier2(curr_data->cmd_buf, &output_barrier_dependency_info);
+
     VkRenderingAttachmentInfo render_color_attachment = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
       .pNext = 0,
@@ -309,9 +329,66 @@ static int window_application() {
     DeferScope(vkCmdBeginRendering(curr_data->cmd_buf, &rendering_info),
                vkCmdEndRendering(curr_data->cmd_buf))
     {
+      VkViewport vp = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)window_width,
+        .height = (float)window_height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+      };
+      vkCmdSetViewport(curr_data->cmd_buf, 0, 1, &vp);
+
+      VkRect2D scissors = {
+        .offset = { .x = 0, .y = 0 },
+        .extent = { .width = (int32_t)window_width, .height = (int32_t)window_height }
+      };
+      vkCmdSetScissor(curr_data->cmd_buf, 0, 1, &scissors);
+
+      vkCmdBindPipeline(curr_data->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, rp.handle);
+      vkCmdDraw(curr_data->cmd_buf, 6, 1, 0, 0);
     }
 
-    SDL_GL_SwapWindow(window.sdl);
+    VkImageMemoryBarrier2 present_barrier = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = 0,
+        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .image = window.images[image_idx],
+        .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1 }
+    };
+    VkDependencyInfo present_barrier_dependency_info = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &present_barrier };
+    vkCmdPipelineBarrier2(curr_data->cmd_buf, &present_barrier_dependency_info);
+    VK_EXPECT_SUCCESS(vkEndCommandBuffer(curr_data->cmd_buf));
+
+    VkPipelineStageFlags wait_stages = (VkPipelineStageFlags)VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submit_info = {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &window.d[window.curr_frame_idx].present_sem,
+        .pWaitDstStageMask = &wait_stages,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &curr_data->cmd_buf,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &window.d[window.curr_frame_idx].render_sem,
+    };
+    VK_EXPECT_SUCCESS(vkQueueSubmit(vk_engine.queue, 1, &submit_info, window.d[window.curr_frame_idx].fence));
+
+    VkPresentInfoKHR present_info = {
+      .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+      .waitSemaphoreCount = 1,
+      .pWaitSemaphores = &window.d[window.curr_frame_idx].render_sem,
+      .swapchainCount = 1,
+      .pSwapchains = &window.sc,
+      .pImageIndices = &image_idx
+    };
+    // we need to take into account VK_ERROR_OUT_OF_DATE_KHR for resize next time. For now we don't need resizing.
+    VK_EXPECT_SUCCESS(vkQueuePresentKHR(vk_engine.queue, &present_info));
+
+    window.curr_frame_idx = (window.curr_frame_idx + 1) % VK_MAX_FRAMES_IN_FLIGHT;
   }
 
   destroy_window(&window);
