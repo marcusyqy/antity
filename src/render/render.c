@@ -173,27 +173,16 @@ static void vk_choose_physical_device() {
     VkQueueFamilyProperties *queue_props = mb_arena_push(scope_temp.arena, VkQueueFamilyProperties, .count = queue_count);
     vkGetPhysicalDeviceQueueFamilyProperties(pd[i], &queue_count, queue_props);
 
-    // const uint8_t graphics_bit = 1 << 1;
-    // const uint8_t compute_bit  = 1 << 2;
-    // const uint8_t present_bit  = 1 << 3;
-    // const uint8_t ideal        = graphics_bit | compute_bit | present_bit;
-    //
-    // uint8_t queue_bit = 0;
     b8 found_right_queue = 0;
     for(uint32_t j = 0; j < queue_count; ++j) {
       if(((queue_props[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT) &&
          ((queue_props[j].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT) &&
          (SDL_Vulkan_GetPresentationSupport(vk_engine.instance, pd[i], j))) {
-        found_right_queue = 1;
+        vk_engine.physical_device = pd[i];
         vk_engine.queue_family_index = j;
       }
     }
     mb_end_temp_arena(&scope_temp);
-
-    if(found_right_queue) {
-      vk_engine.physical_device = pd[i];
-      break;
-    }
   }
 
   mb_end_temp_arena(&temp);
@@ -219,10 +208,20 @@ static void vk_create_device(void) {
 
   const char *enabled_extension[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-  // nothing to enable yet.
-
-  VkPhysicalDeviceVulkan12Features enabled_vk12_features = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .descriptorIndexing = VK_TRUE, .shaderSampledImageArrayNonUniformIndexing = VK_TRUE, .descriptorBindingVariableDescriptorCount = VK_TRUE, .runtimeDescriptorArray = VK_TRUE, .bufferDeviceAddress = VK_TRUE };
-  VkPhysicalDeviceVulkan13Features enabled_vk13_features = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &enabled_vk12_features, .synchronization2 = VK_TRUE, .dynamicRendering = VK_TRUE };
+  VkPhysicalDeviceVulkan12Features enabled_vk12_features = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+    .descriptorIndexing = VK_TRUE,
+    .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+    .descriptorBindingVariableDescriptorCount = VK_TRUE,
+    .runtimeDescriptorArray = VK_TRUE,
+    .bufferDeviceAddress = VK_TRUE
+  };
+  VkPhysicalDeviceVulkan13Features enabled_vk13_features = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+    .pNext = &enabled_vk12_features,
+    .synchronization2 = VK_TRUE,
+    .dynamicRendering = VK_TRUE
+  };
   VkPhysicalDeviceFeatures enabled_features = { .samplerAnisotropy = VK_TRUE };
 
   VkDeviceCreateInfo create_info = {
@@ -319,13 +318,13 @@ static void vk_create_or_recreate_swapchain(Window *window) {
       .image = window->images[i],
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
       .format = image_format,
-      .components = (VkComponentMapping) {
+      .components = {
         .r = VK_COMPONENT_SWIZZLE_IDENTITY,
         .g = VK_COMPONENT_SWIZZLE_IDENTITY,
         .b = VK_COMPONENT_SWIZZLE_IDENTITY,
         .a = VK_COMPONENT_SWIZZLE_IDENTITY
       },
-      .subresourceRange = (VkImageSubresourceRange) {
+      .subresourceRange = {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .baseMipLevel = 0,
         .levelCount = 1,

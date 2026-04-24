@@ -56,13 +56,13 @@ static RenderPipeline create_default_render_pipeline(void) {
   VK_EXPECT_SUCCESS(vkCreateShaderModule(vk_engine.device, &shader_ci, vk_engine.allocator, &frag_shader_module));
 
   VkPipelineShaderStageCreateInfo shader_stages[] = {
-    (VkPipelineShaderStageCreateInfo){
+    {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage = VK_SHADER_STAGE_VERTEX_BIT,
       .module = vert_shader_module,
       .pName = "main",
     },
-    (VkPipelineShaderStageCreateInfo){
+    {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
       .module = frag_shader_module,
