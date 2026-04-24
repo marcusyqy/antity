@@ -6,3 +6,4 @@
 - [ ] Figure out how to link dll with shaderc. For now let's link statically.
 
 - [ ] Don't want to use vulkan for macos. I think we can just use metal? Or what should we do?
+- [ ] Need to make a better thing for resizing and other events in windows.

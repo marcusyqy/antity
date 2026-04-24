@@ -52,6 +52,8 @@ void cleanup_vulkan();
 Window create_window(SDL_Window *sdl);
 void   destroy_window(Window    *window);
 
+void  window_resize(Window *window);
+
 // misc
 const char *vk_result_to_string(VkResult result);
 

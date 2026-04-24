@@ -10,12 +10,12 @@
 // @TODO: figure out whether this should be like this or not.
 static struct {
   LARGE_INTEGER frequency;
-  bool initialized;
+  b8 initialized;
 } os_state = {0};
 
 void mb_os_init(void) {
   QueryPerformanceFrequency(&os_state.frequency);
-  os_state.initialized = true;
+  os_state.initialized = 1;
 }
 
 uint64_t mb_os_now_microseconds(void) {
@@ -33,7 +33,7 @@ void *mb_os_reserve_memory(uint64_t size) {
 void mb_os_commit_memory(void *ptr, uint64_t size) {
   if(size == 0) return;
 
-  bool result = VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0;
+  b8 result = VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0;
   (void)result;
   assert(result);
 }

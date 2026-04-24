@@ -35,7 +35,6 @@ static RenderPipeline create_default_render_pipeline(void) {
   mb_StringView spv_frag_shader = shader_compiler_read_glsl_and_compile_to_spv(temp.arena, &sc, mb_str_from_cstr("data/shaders/color.frag"), shaderc_glsl_fragment_shader);
   assert(spv_vert_shader.count && spv_frag_shader.count);
 
-
   VkShaderModule vert_shader_module = 0;
   VkShaderModuleCreateInfo vert_shader_ci = {
     .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -162,10 +161,7 @@ static RenderPipeline create_default_render_pipeline(void) {
     .srcAlphaBlendFactor = 0,
     .dstAlphaBlendFactor = 0,
     .alphaBlendOp = 0,
-    .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                      VK_COLOR_COMPONENT_G_BIT |
-                      VK_COLOR_COMPONENT_B_BIT |
-                      VK_COLOR_COMPONENT_A_BIT,
+    .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
 
   };
   VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {
@@ -233,7 +229,7 @@ static int window_application() {
   float main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
   fprintf(stdout, "Main scale %f\n", main_scale);
 
-  SDL_WindowFlags window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY; // | SDL_WINDOW_MAXIMIZED; | SDL_WINDOW_RESIZABLE
+  SDL_WindowFlags window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE; // | SDL_WINDOW_MAXIMIZED;
 
   // @TODO: figure out this (probably good for high dpi stuff).
   // SDL_Rect rect = {};
@@ -251,30 +247,36 @@ static int window_application() {
 
   Window window = create_window(sdl);
   RenderPipeline rp = create_default_render_pipeline();
-  (void)rp;
-  // @bookmark we need to do the rendering now.
 
   SDL_Event event = {0};
   b8 running = 1;
   b8 need_resize = 0;
   while(running) {
-    while (SDL_PollEvent(&event)) {
+
+    // to make things better we may have to make this threaded? Unless we don't care about how fast the window resizes
+    while(SDL_PollEvent(&event)) {
       if(event.type == SDL_EVENT_QUIT) running = 0;
-      if(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window.sdl)) running = 0;
-      if(event.type == SDL_EVENT_WINDOW_RESIZED && event.window.windowID == SDL_GetWindowID(window.sdl)) {
-        window_width  = (uint32_t)event.window.data1;
-        window_height = (uint32_t)event.window.data2;
-        need_resize = 1;
+      if(event.window.windowID == SDL_GetWindowID(window.sdl)) {
+        if(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) running = 0;
+        if(event.type == SDL_EVENT_WINDOW_RESIZED) {
+            window_width  = (uint32_t)event.window.data1;
+            window_height = (uint32_t)event.window.data2;
+            need_resize = 1;
+        }
+        if(event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_Q) running = 0;
       }
-      if(event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_Q) running = 0;
     }
 
-    // not implemented
-    assert(!need_resize);
+    if(need_resize) {
+      window_resize(&window);
+      need_resize = 0;
+      continue;
+    }
 
     WindowDynData *curr_data = &window.d[window.curr_frame_idx];
     VK_EXPECT_SUCCESS(vkWaitForFences(vk_engine.device, 1, &curr_data->fence, 1, UINT64_MAX));
     VK_EXPECT_SUCCESS(vkResetFences(vk_engine.device, 1, &curr_data->fence));
+
     uint32_t image_idx = 0;
     VK_EXPECT_SUCCESS(vkAcquireNextImageKHR(vk_engine.device, window.sc, UINT64_MAX, curr_data->present_sem, VK_NULL_HANDLE, &image_idx));
 
@@ -309,7 +311,7 @@ static int window_application() {
       .resolveMode = 0,
       .resolveImageView = VK_NULL_HANDLE,
       .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
       .clearValue = { .color = { 0.f, 0.f, 0.f, 1.f } },
     };
@@ -353,9 +355,9 @@ static int window_application() {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_NONE, // VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         .dstAccessMask = 0,
-        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .oldLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .image = window.images[image_idx],
         .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1 }
@@ -385,16 +387,19 @@ static int window_application() {
       .pSwapchains = &window.sc,
       .pImageIndices = &image_idx
     };
-    // we need to take into account VK_ERROR_OUT_OF_DATE_KHR for resize next time. For now we don't need resizing.
-    VK_EXPECT_SUCCESS(vkQueuePresentKHR(vk_engine.queue, &present_info));
 
-    window.curr_frame_idx = (window.curr_frame_idx + 1) % VK_MAX_FRAMES_IN_FLIGHT;
+    // we need to take into account VK_ERROR_OUT_OF_DATE_KHR for resize next time. For now we don't need resizing.
+    VkResult present_result = vkQueuePresentKHR(vk_engine.queue, &present_info);
+    if(present_result == VK_ERROR_OUT_OF_DATE_KHR) need_resize = 1;
+    else if(present_result != VK_SUCCESS)          printf("Vk call `vkQueuePresentKHR`: failed with %s", vk_result_to_string(present_result));
+    else                                           window.curr_frame_idx = (window.curr_frame_idx + 1) % VK_MAX_FRAMES_IN_FLIGHT;
   }
 
   destroy_window(&window);
   render_pipeline_destroy(&rp);
   SDL_DestroyWindow(window.sdl);
   cleanup_vulkan();
+  SDL_QuitSubSystem(SDL_INIT_VIDEO);
   SDL_Quit();
   return 0;
 }

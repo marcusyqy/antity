@@ -285,6 +285,8 @@ static void vk_create_or_recreate_swapchain(Window *window) {
 
   VK_EXPECT_SUCCESS(vkCreateSwapchainKHR(vk_engine.device, &create_info, vk_engine.allocator, &window->sc));
 
+  if(create_info.oldSwapchain) vkDestroySwapchainKHR(vk_engine.device, create_info.oldSwapchain, vk_engine.allocator);
+
   // clean up past window stuff.
   for(uint32_t i = 0; i < window->v_count; ++i) {
     vkDestroyImageView(vk_engine.device, window->image_views[i], vk_engine.allocator);
@@ -333,15 +335,6 @@ static void vk_create_or_recreate_swapchain(Window *window) {
     };
     VK_EXPECT_SUCCESS(vkCreateImageView(vk_engine.device, &v_create_info, vk_engine.allocator, window->image_views + i));
   }
-
-  VkCommandPoolCreateInfo command_pool_create_info = {
-    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .pNext = 0,
-    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-    .queueFamilyIndex = vk_engine.queue_family_index,
-  };
-  VK_EXPECT_SUCCESS(vkCreateCommandPool(vk_engine.device, &command_pool_create_info, vk_engine.allocator, &window->cmd_pool));
-
 
   VkCommandBufferAllocateInfo command_buffer_allocate_info = {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -410,8 +403,18 @@ void cleanup_vulkan(void) {
 Window create_window(SDL_Window *sdl) {
   // figure out when we should initialize (create_window right now cannot be called twice).
   Window window = {0};
+  window.sdl = sdl;
   window.arena = mb_arena_create(0, KB(1));
   window.surface = vk_create_surface(sdl);
+
+  VkCommandPoolCreateInfo command_pool_create_info = {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .pNext = 0,
+    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+    .queueFamilyIndex = vk_engine.queue_family_index,
+  };
+  VK_EXPECT_SUCCESS(vkCreateCommandPool(vk_engine.device, &command_pool_create_info, vk_engine.allocator, &window.cmd_pool));
+
   vk_create_or_recreate_swapchain(&window);
   return window;
 }
@@ -451,3 +454,8 @@ const char *vk_result_to_string(VkResult result) {
   return "VkResultUnknown";
 }
 
+
+void window_resize(Window *window) {
+  VK_EXPECT_SUCCESS(vkDeviceWaitIdle(vk_engine.device));
+  vk_create_or_recreate_swapchain(window);
+}
