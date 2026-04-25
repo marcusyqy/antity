@@ -173,7 +173,6 @@ static void vk_choose_physical_device() {
     VkQueueFamilyProperties *queue_props = mb_arena_push(scope_temp.arena, VkQueueFamilyProperties, .count = queue_count);
     vkGetPhysicalDeviceQueueFamilyProperties(pd[i], &queue_count, queue_props);
 
-    b8 found_right_queue = 0;
     for(uint32_t j = 0; j < queue_count; ++j) {
       if(((queue_props[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT) &&
          ((queue_props[j].queueFlags & VK_QUEUE_COMPUTE_BIT) == VK_QUEUE_COMPUTE_BIT) &&
