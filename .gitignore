@@ -4,3 +4,5 @@ build.exe
 # compile_flags.txt
 .vs
 raddbg
+third_party/freetype/objs
+third_party/freetype-demos/

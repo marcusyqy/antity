@@ -8,6 +8,8 @@
 
 #include <volk/volk.h>
 
+#include "render/font.h"
+
 typedef struct RenderPipeline {
   VkPipeline handle;
   VkPipelineLayout layout;
@@ -404,11 +406,12 @@ static int window_application() {
   return 0;
 }
 
+#define TESTING
 int main() {
 #ifndef TESTING
   return window_application();
 #else
-
+  font_test();
 #endif
 }
 
@@ -419,4 +422,4 @@ int main() {
 #include "base/os.c"
 #include "render/render.c"
 #include "render/shader_compiler.c"
-
+#include "render/font.c"
