@@ -260,6 +260,22 @@ static void vk_create_or_recreate_swapchain(Window *window) {
 
   const VkFormat image_format = VK_FORMAT_B8G8R8A8_SRGB ;
 
+
+  uint32_t present_mode_count = 0;
+  VK_EXPECT_SUCCESS(vkGetPhysicalDeviceSurfacePresentModesKHR(vk_engine.physical_device, window->surface, &present_mode_count, NULL));
+  VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+
+  if (present_mode_count > 0) {
+    mb_TempArena tmp = mb_begin_temp_arena(0);
+    VkPresentModeKHR* modes = mb_arena_push(tmp.arena, VkPresentModeKHR, .count = present_mode_count);
+    assert(modes);
+    VK_EXPECT_SUCCESS(vkGetPhysicalDeviceSurfacePresentModesKHR(vk_engine.physical_device, window->surface, &present_mode_count, modes));
+    for (uint32_t i = 0; i < present_mode_count; ++i) {
+      if (modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) { present_mode = VK_PRESENT_MODE_MAILBOX_KHR; break; }
+    }
+    mb_end_temp_arena(&tmp);
+  }
+
   VkSwapchainCreateInfoKHR create_info = {
     .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
     .pNext                 = 0,
@@ -276,7 +292,7 @@ static void vk_create_or_recreate_swapchain(Window *window) {
     .pQueueFamilyIndices   = 0,
     .preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
     .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-    .presentMode           = VK_PRESENT_MODE_MAILBOX_KHR,
+    .presentMode           = present_mode,
     .clipped               = VK_FALSE,
     .oldSwapchain          = window->sc,
   };

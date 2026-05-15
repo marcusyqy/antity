@@ -40,7 +40,7 @@ if ! command -v "$AR" >/dev/null 2>&1; then
   exit 1
 fi
 
-BASE_CFLAGS="-c -DFT2_BUILD_LIBRARY -D_REENTRANT -I$FT_ROOT/include -I$FT_ROOT"
+BASE_CFLAGS="-c -DFT2_BUILD_LIBRARY -D_REENTRANT -DHAVE_UNISTD_H -DHAVE_FCNTL_H -I$FT_ROOT/include -I$FT_ROOT"
 if [ "$BUILD_TYPE" = "debug" ]; then
   CFLAGS_USE="-O0 -g -D_DEBUG"
 else

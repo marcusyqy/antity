@@ -406,7 +406,7 @@ static int window_application() {
   return 0;
 }
 
-#define TESTING
+// #define TESTING
 int main() {
 #ifndef TESTING
   return window_application();
