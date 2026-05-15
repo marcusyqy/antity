@@ -240,7 +240,7 @@ static int window_application() {
   uint32_t window_width = 1200;
   uint32_t window_height = 800;
 
-  SDL_Window *sdl = SDL_CreateWindow("Game", window_width, window_height, window_flags);
+  SDL_Window *sdl = SDL_CreateWindow("Madit", window_width, window_height, window_flags);
   if(!sdl) {
     fprintf(stdout, "Failed to create SDL3 window: %s\n", SDL_GetError());
     SDL_Quit();

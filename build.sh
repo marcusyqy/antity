@@ -105,16 +105,16 @@ fi
 
 clang $CFLAGS $DEFINES \
   -Ithird_party/SDL/include -Isrc -Ithird_party -Ithird_party/freetype/include \
-  -c src/build.c -o "$BUILD_DIR/game.o"
+  -c src/build.c -o "$BUILD_DIR/madit.o"
 
-clang++ "$BUILD_DIR/game.o" -o "$BUILD_DIR/game" \
+clang++ "$BUILD_DIR/madit.o" -o "$BUILD_DIR/madit" \
   "$BUILD_DIR/libvma.a" \
   "$BUILD_DIR/libfreetype.a" \
   "$SDL_LIB" \
   "$SHADERC_LIB" \
   -Wl,-rpath,"$RPATH_ORIGIN" \
   -Wl,-rpath,"$SDK_LIB_DIR" || {
-  rm -f "$BUILD_DIR/game"
+  rm -f "$BUILD_DIR/madit"
   exit 1
 }
 
