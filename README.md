@@ -1,5 +1,3 @@
-# Antity
-A vulkan experiment.
+# Madit
+Writing a text editor
 
-
-vulkaninfo for determining extensions and stuff.
